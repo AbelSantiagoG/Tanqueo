@@ -1,12 +1,10 @@
 "use client"
 
 interface FuelGaugeProps {
-  current: number
-  max: number
   percentage: number
 }
 
-export function FuelGauge({ current, max, percentage }: FuelGaugeProps) {
+export function FuelGauge({ percentage }: FuelGaugeProps) {
   // Calculate the angle for the semi-circular gauge
   // 0% = -90deg (left), 100% = 90deg (right)
   const angle = -90 + (percentage / 100) * 180
@@ -19,9 +17,9 @@ export function FuelGauge({ current, max, percentage }: FuelGaugeProps) {
   }
 
   const getGlowColor = () => {
-    if (percentage < 20) return "drop-shadow-[0_0_10px_oklch(0.65_0.25_25/0.5)]"
-    if (percentage < 40) return "drop-shadow-[0_0_10px_oklch(0.8_0.2_70/0.5)]"
-    return "drop-shadow-[0_0_10px_oklch(0.8_0.25_145/0.5)]"
+    if (percentage < 20) return "drop-shadow-[0_0_10px_rgba(239,68,68,0.5)]"
+    if (percentage < 40) return "drop-shadow-[0_0_10px_rgba(245,158,11,0.5)]"
+    return "drop-shadow-[0_0_10px_rgba(16,185,129,0.5)]"
   }
 
   return (
@@ -45,9 +43,9 @@ export function FuelGauge({ current, max, percentage }: FuelGaugeProps) {
         {/* Gradient Definition */}
         <defs>
           <linearGradient id="gaugeGradient" x1="0%" y1="0%" x2="100%" y2="0%">
-            <stop offset="0%" stopColor="oklch(0.65 0.25 25)" />
-            <stop offset="50%" stopColor="oklch(0.8 0.2 70)" />
-            <stop offset="100%" stopColor="oklch(0.8 0.25 145)" />
+            <stop offset="0%" stopColor="#ef4444" />
+            <stop offset="50%" stopColor="#f59e0b" />
+            <stop offset="100%" stopColor="#10b981" />
           </linearGradient>
         </defs>
         

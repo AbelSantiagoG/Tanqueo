@@ -1,39 +1,44 @@
 import { supabase } from "@/lib/supabase"
 import type { PhotoType, UploadedEvidence } from "@/lib/types"
 
-const BUCKET = "evidencias-tanqueo"
+async function sessionHeaders() {
+  const { data, error } = await supabase.auth.getSession()
+  if (error || !data.session?.access_token) throw new Error("Inicia sesion nuevamente para subir evidencias.")
+  return {
+    Authorization: `Bearer ${data.session.access_token}`,
+    "Content-Type": "application/json",
+  }
+}
 
-function dataUrlToBlob(dataUrl: string) {
-  const [header, payload] = dataUrl.split(",")
-  const mime = header.match(/data:(.*?);/)?.[1] || "image/jpeg"
-  const bytes = atob(payload)
-  const values = new Uint8Array(bytes.length)
-  for (let index = 0; index < bytes.length; index += 1) values[index] = bytes.charCodeAt(index)
-  return new Blob([values], { type: mime })
+async function responseJson(response: Response) {
+  const body = await response.json()
+  if (!response.ok) throw new Error(body.error || "No se pudo procesar la evidencia.")
+  return body
 }
 
 export async function uploadEvidence(
-  userId: string,
   orderId: string,
   type: PhotoType,
   dataUrl: string,
 ): Promise<UploadedEvidence> {
-  const path = `${userId}/${orderId}/${type}-${crypto.randomUUID()}.jpg`
-  const blob = dataUrlToBlob(dataUrl)
-  if (blob.size > 5 * 1024 * 1024) throw new Error("La imagen supera el limite de 5 MB")
-
-  const { error } = await supabase.storage.from(BUCKET).upload(path, blob, {
-    contentType: "image/jpeg",
-    upsert: false,
+  const response = await fetch("/api/evidence", {
+    method: "POST",
+    headers: await sessionHeaders(),
+    body: JSON.stringify({ orderId, type, dataUrl }),
   })
-  if (error) throw error
-
-  const { data } = supabase.storage.from(BUCKET).getPublicUrl(path)
-  return { path, url: data.publicUrl }
+  return responseJson(response)
 }
 
 export async function removeEvidence(paths: string[]) {
   if (!paths.length) return
-  const { error } = await supabase.storage.from(BUCKET).remove(paths)
-  if (error) console.warn("No se pudieron limpiar evidencias sin asociar:", error)
+  try {
+    const response = await fetch("/api/evidence", {
+      method: "DELETE",
+      headers: await sessionHeaders(),
+      body: JSON.stringify({ paths }),
+    })
+    await responseJson(response)
+  } catch (error) {
+    console.warn("No se pudieron limpiar evidencias sin asociar:", error)
+  }
 }

@@ -11,7 +11,6 @@ export async function createFuelOrder(input: {
   operatorId: string
   vehicleId: string
   stationId: string
-  authorizedGallons: number
   issueDate: string
   expiryDate: string
   notes?: string
@@ -22,7 +21,6 @@ export async function createFuelOrder(input: {
       p_operator_id: input.operatorId,
       p_vehicle_id: input.vehicleId,
       p_station_id: input.stationId,
-      p_galones_autorizados: input.authorizedGallons,
       p_fecha_emision: input.issueDate,
       p_fecha_vencimiento: input.expiryDate,
       p_observaciones: input.notes || null,
@@ -43,8 +41,7 @@ export async function executeFuelOrder(input: {
   notes?: string
   gps: { lat: number; lng: number; accuracy: number }
   evidence: {
-    odometro: UploadedEvidence
-    tanque: UploadedEvidence
+    tablero: UploadedEvidence
     factura: UploadedEvidence
   }
 }) {
@@ -61,10 +58,8 @@ export async function executeFuelOrder(input: {
       p_gps_lat: input.gps.lat,
       p_gps_lng: input.gps.lng,
       p_gps_precision: input.gps.accuracy,
-      p_photo_odometro_url: input.evidence.odometro.url,
-      p_photo_odometro_path: input.evidence.odometro.path,
-      p_photo_tanque_url: input.evidence.tanque.url,
-      p_photo_tanque_path: input.evidence.tanque.path,
+      p_photo_tablero_url: input.evidence.tablero.url,
+      p_photo_tablero_path: input.evidence.tablero.path,
       p_photo_factura_url: input.evidence.factura.url,
       p_photo_factura_path: input.evidence.factura.path,
     })

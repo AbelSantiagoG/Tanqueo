@@ -16,7 +16,7 @@ type LoginProfile = Pick<Profile, "id" | "full_name" | "role" | "cargo">
 
 export function LoginView() {
   const router = useRouter()
-  const { loginWithCredentials } = useAuth()
+  const { loginWithCredentials, loginWithSelectedProfile } = useAuth()
   const [profiles, setProfiles] = useState<LoginProfile[]>([])
   const [role, setRole] = useState<UserRole | null>(null)
   const [selected, setSelected] = useState<LoginProfile | null>(null)
@@ -52,12 +52,15 @@ export function LoginView() {
   const submit = async (event: React.FormEvent) => {
     event.preventDefault()
     setErrorMsg("")
-    if (!email || !password) return setErrorMsg("Ingresa correo y contrasena.")
     if (role !== "admin" && !selected) return setErrorMsg("Selecciona tu perfil.")
+    if (role === "admin" && !email) return setErrorMsg("Ingresa correo y contrasena.")
+    if (!password) return setErrorMsg("Ingresa la contrasena.")
 
     setIsLoading(true)
     try {
-      const profile = await loginWithCredentials(email, password, selected?.id)
+      const profile = role === "admin"
+        ? await loginWithCredentials(email, password)
+        : await loginWithSelectedProfile(selected!.id, password)
       if (role && profile.role !== role) throw new Error("El perfil autenticado no tiene el rol seleccionado.")
       router.replace(`/${profile.role}`)
     } catch (error: any) {
@@ -116,13 +119,15 @@ export function LoginView() {
                 </div>
               )}
 
-              <div className="space-y-1">
-                <Label htmlFor="email" className="text-slate-700">Correo</Label>
-                <div className="relative">
-                  <Mail className="absolute left-3 top-3 w-4 h-4 text-slate-400" />
-                  <Input id="email" type="email" value={email} onChange={(event) => setEmail(event.target.value)} className="pl-9 bg-white" />
+              {role === "admin" && (
+                <div className="space-y-1">
+                  <Label htmlFor="email" className="text-slate-700">Correo</Label>
+                  <div className="relative">
+                    <Mail className="absolute left-3 top-3 w-4 h-4 text-slate-400" />
+                    <Input id="email" type="email" value={email} onChange={(event) => setEmail(event.target.value)} className="pl-9 bg-white" />
+                  </div>
                 </div>
-              </div>
+              )}
               <div className="space-y-1">
                 <Label htmlFor="password" className="text-slate-700">Contrasena</Label>
                 <div className="relative">

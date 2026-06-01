@@ -108,7 +108,7 @@ export function RecordsView({ operatorId, allowDelete = false, embedded = false 
         ["Rendimiento real", "realYield", 18], ["Rendimiento esperado", "expectedYield", 22], ["Alcance estimado", "range", 18],
         ["Alerta rendimiento", "alert", 18], ["Despachador", "dispatcher", 22], ["Observaciones", "notes", 30],
         ["Latitud", "lat", 15], ["Longitud", "lng", 15], ["Precision GPS", "accuracy", 15], ["Mapa", "maps", 42],
-        ["Foto odometro", "odometro", 48], ["Foto tanque", "tank", 48], ["Foto factura", "invoice", 48], ["Timestamp", "timestamp", 22],
+        ["Foto tablero", "dashboard", 48], ["Foto factura", "invoice", 48], ["Timestamp", "timestamp", 22],
       ]
       sheet.columns = columns.map(([header, key, width]) => ({ header, key, width }))
       sheet.getRow(1).eachCell((cell) => {
@@ -125,7 +125,7 @@ export function RecordsView({ operatorId, allowDelete = false, embedded = false 
           realYield: record.rendimiento_real ?? "-", expectedYield: record.rendimiento_esperado, range: record.alcance_estimado,
           alert: record.alerta_rendimiento ? "ALERTA" : "OK", dispatcher: record.despachador?.full_name, notes: record.observaciones,
           lat: record.gps_lat, lng: record.gps_lng, accuracy: record.gps_precision, maps: record.gps_maps_url,
-          odometro: photos.odometro, tank: photos.tanque, invoice: photos.factura, timestamp: record.created_at,
+          dashboard: photos.tablero, invoice: photos.factura, timestamp: record.created_at,
         })
       })
       sheet.views = [{ state: "frozen", ySplit: 1 }]

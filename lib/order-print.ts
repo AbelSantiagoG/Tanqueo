@@ -78,8 +78,8 @@ function buildFuelOrderDocument(order: FuelOrder, settings?: CompanySettings | n
         <div style="font-size:8px;color:#6b7590">Cap: ${escapeHtml(order.vehicles?.capacidad_tanque)} gal - ${escapeHtml(order.vehicles?.color)}</div>
       </div>
       <div style="flex:1;padding:8px 10px;text-align:center">
-        <div style="margin-bottom:3px;color:#9ca3af;font-size:8px;font-weight:700;letter-spacing:1px;text-transform:uppercase">Galones autorizados</div>
-        <div style="color:#9ca3af;font-size:36px;font-weight:900;line-height:1">${escapeHtml(order.galones_autorizados)}</div>
+        <div style="margin-bottom:3px;color:#9ca3af;font-size:8px;font-weight:700;letter-spacing:1px;text-transform:uppercase">Galones suministrados</div>
+        <div style="color:#9ca3af;font-size:36px;font-weight:900;line-height:1">${isExecuted ? escapeHtml(order.galones) : "-"}</div>
         <div style="margin-top:3px;color:#9ca3af;font-size:8px">${escapeHtml(station?.combustible || "Combustible")}</div>
       </div>
     </div>
@@ -96,7 +96,7 @@ function buildFuelOrderDocument(order: FuelOrder, settings?: CompanySettings | n
     </div>` : ""}
     ${order.observaciones ? `<div style="margin-bottom:8px;padding:6px 9px;border:1px solid #d97706;border-radius:6px;background:#fef3c7;font-size:8px"><strong>Observaciones:</strong> ${escapeHtml(order.observaciones)}</div>` : ""}
     <div style="margin-bottom:8px;padding:7px 9px;border-radius:6px;background:#f4f6fa;color:#525b70;font-size:7px;line-height:1.35">
-      <strong>INSTRUCCIONES:</strong> La presente orden es valida unicamente por los galones autorizados, para el vehiculo y operario indicados, hasta la fecha de vencimiento senalada. La estacion de servicio debe verificar la placa del vehiculo y la cedula del operario antes de suministrar combustible. Cualquier diferencia debe reportarse al despachador.
+      <strong>INSTRUCCIONES:</strong> La presente orden es valida para el vehiculo y operario indicados hasta la fecha de vencimiento senalada. La estacion de servicio debe verificar la placa del vehiculo y la cedula del operario antes de suministrar combustible. El operario debe registrar los galones suministrados y la factura al finalizar el tanqueo.
     </div>
     <div style="display:flex;gap:14px">
       <div style="flex:1;text-align:center"><div style="height:21px;margin-bottom:3px;border-bottom:1.5px solid #1a2035"></div><div style="font-size:7px;font-weight:700;text-transform:uppercase">${escapeHtml(order.despachador?.full_name || "Despachador")}</div><div style="color:#6b7590;font-size:7px">Firma despachador</div></div>

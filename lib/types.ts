@@ -1,6 +1,6 @@
 export type UserRole = "operario" | "despachador" | "admin"
 export type OrderStatus = "pendiente" | "vencida" | "ejecutada" | "verificado" | "observacion" | "cerrada"
-export type PhotoType = "odometro" | "tanque" | "factura"
+export type PhotoType = "tablero" | "factura"
 
 export interface Profile {
   id: string
@@ -66,7 +66,6 @@ export interface FuelOrder {
   vehicle_id: string
   station_id?: string | null
   despachador_id?: string | null
-  galones_autorizados?: number | null
   galones?: number | null
   valor_total?: number | null
   kilometraje_actual?: number | null

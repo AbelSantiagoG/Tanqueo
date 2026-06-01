@@ -10,6 +10,7 @@ interface AuthContextType {
   isAuthenticated: boolean
   isLoading: boolean
   loginWithCredentials: (email: string, password: string, expectedProfileId?: string) => Promise<Profile>
+  loginWithSelectedProfile: (profileId: string, password: string) => Promise<Profile>
   logout: () => Promise<void>
 }
 
@@ -64,6 +65,26 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
     return profile
   }
 
+  const loginWithSelectedProfile = async (profileId: string, password: string) => {
+    const response = await fetch("/api/auth/profile-login", {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ profileId, password }),
+    })
+    const body = await response.json()
+    if (!response.ok) throw new Error(body.error || "No fue posible iniciar sesion.")
+
+    const { data, error } = await supabase.auth.setSession(body.session)
+    if (error || !data.user) throw error || new Error("Supabase no devolvio un usuario autenticado.")
+    const profile = await loadProfile(data.user.id)
+    if (profile.id !== profileId) {
+      await supabase.auth.signOut()
+      throw new Error("Las credenciales no corresponden al perfil seleccionado.")
+    }
+    setUser(profile)
+    return profile
+  }
+
   const logout = async () => {
     setUser(null)
     await supabase.auth.signOut()
@@ -77,6 +98,7 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
         isAuthenticated: Boolean(user),
         isLoading,
         loginWithCredentials,
+        loginWithSelectedProfile,
         logout,
       }}
     >

@@ -96,7 +96,6 @@ create table if not exists public.fuel_orders (
 
 alter table public.fuel_orders add column if not exists despachador_id uuid references public.profiles(id) on delete set null;
 alter table public.fuel_orders add column if not exists station_id uuid references public.service_stations(id) on delete restrict;
-alter table public.fuel_orders add column if not exists galones_autorizados numeric(10, 2) not null default 0;
 alter table public.fuel_orders add column if not exists galones numeric(10, 2);
 alter table public.fuel_orders add column if not exists valor_total numeric(14, 2);
 alter table public.fuel_orders add column if not exists kilometraje_actual numeric(14, 2);
@@ -120,6 +119,11 @@ drop function if exists public.create_fuel_order(uuid, uuid, numeric, date, date
 drop function if exists public.create_fuel_order(uuid, uuid, uuid, numeric, date, date, text);
 drop function if exists public.create_fuel_order(uuid, uuid, uuid, date, date, text);
 drop function if exists public.execute_fuel_order(uuid, date, numeric, numeric, numeric, text, integer, text, double precision, double precision, double precision, text, text, text, text, text, text);
+drop function if exists public.execute_fuel_order(uuid, date, numeric, numeric, numeric, text, integer, text, double precision, double precision, double precision, text, text, text, text);
+
+-- Earlier versions requested an authorized amount before the supply. The
+-- operator now records the actual amount at the service station.
+alter table public.fuel_orders drop column if exists galones_autorizados;
 
 -- Older installations used execution fields as required order fields. They must
 -- remain empty while an order is pending.
@@ -179,7 +183,7 @@ begin
     execute format('alter table public.order_photos drop constraint %I', constraint_name);
   end loop;
   alter table public.order_photos
-    add constraint order_photos_tipo_check check (tipo in ('odometro', 'tanque', 'factura'));
+    add constraint order_photos_tipo_check check (tipo in ('odometro', 'tanque', 'tablero', 'factura'));
 end;
 $$;
 
@@ -214,19 +218,6 @@ update public.fuel_records r
 set station_id = o.station_id
 from public.fuel_orders o
 where r.order_id = o.id and r.station_id is null;
-
-insert into storage.buckets (id, name, public, file_size_limit, allowed_mime_types)
-values (
-  'evidencias-tanqueo',
-  'evidencias-tanqueo',
-  true,
-  5242880,
-  array['image/jpeg', 'image/png', 'image/webp']
-)
-on conflict (id) do update
-set public = excluded.public,
-    file_size_limit = excluded.file_size_limit,
-    allowed_mime_types = excluded.allowed_mime_types;
 
 create or replace function public.current_profile_role()
 returns text
@@ -292,7 +283,6 @@ create or replace function public.create_fuel_order(
   p_operator_id uuid,
   p_vehicle_id uuid,
   p_station_id uuid,
-  p_galones_autorizados numeric,
   p_fecha_emision date,
   p_fecha_vencimiento date,
   p_observaciones text default null
@@ -317,10 +307,6 @@ begin
   if p_fecha_vencimiento < p_fecha_emision then
     raise exception 'La fecha de vencimiento no puede ser anterior a la emision';
   end if;
-  if p_galones_autorizados <= 0 then
-    raise exception 'Los galones autorizados deben ser mayores que cero';
-  end if;
-
   select * into cfg from public.company_settings order by created_at limit 1;
   select * into vehicle from public.vehicles where id = p_vehicle_id and activo = true;
   if vehicle.id is null then
@@ -340,10 +326,10 @@ begin
   generated_num := coalesce(cfg.prefix, 'OS') || '-' || year_value || '-' || lpad(next_value::text, 4, '0');
 
   insert into public.fuel_orders (
-    num, operator_id, vehicle_id, station_id, despachador_id, galones_autorizados,
+    num, operator_id, vehicle_id, station_id, despachador_id,
     rendimiento_esperado, fecha_emision, fecha_vencimiento, observaciones, estado
   ) values (
-    generated_num, p_operator_id, p_vehicle_id, p_station_id, auth.uid(), p_galones_autorizados,
+    generated_num, p_operator_id, p_vehicle_id, p_station_id, auth.uid(),
     vehicle.rendimiento_esperado, p_fecha_emision, p_fecha_vencimiento,
     nullif(trim(p_observaciones), ''), 'pendiente'
   )
@@ -364,10 +350,8 @@ create or replace function public.execute_fuel_order(
   p_gps_lat double precision,
   p_gps_lng double precision,
   p_gps_precision double precision,
-  p_photo_odometro_url text,
-  p_photo_odometro_path text,
-  p_photo_tanque_url text,
-  p_photo_tanque_path text,
+  p_photo_tablero_url text,
+  p_photo_tablero_path text,
   p_photo_factura_url text,
   p_photo_factura_path text
 )
@@ -400,11 +384,8 @@ begin
   if p_kilometraje_actual <= 0 or p_galones <= 0 or p_valor_total <= 0 then
     raise exception 'Kilometraje, galones y valor deben ser mayores que cero';
   end if;
-  if selected_order.galones_autorizados > 0 and p_galones > selected_order.galones_autorizados then
-    raise exception 'Los galones suministrados no pueden superar los autorizados';
-  end if;
-  if p_photo_odometro_url is null or p_photo_tanque_url is null or p_photo_factura_url is null then
-    raise exception 'Las tres evidencias fotograficas son obligatorias';
+  if p_photo_tablero_url is null or p_photo_factura_url is null then
+    raise exception 'Las dos evidencias fotograficas son obligatorias';
   end if;
   if selected_order.station_id is null or not exists (
     select 1 from public.service_stations where id = selected_order.station_id and activo = true
@@ -448,8 +429,7 @@ begin
 
   insert into public.order_photos (order_id, record_id, tipo, photo_url, storage_path)
   values
-    (selected_order.id, record_row.id, 'odometro', p_photo_odometro_url, p_photo_odometro_path),
-    (selected_order.id, record_row.id, 'tanque', p_photo_tanque_url, p_photo_tanque_path),
+    (selected_order.id, record_row.id, 'tablero', p_photo_tablero_url, p_photo_tablero_path),
     (selected_order.id, record_row.id, 'factura', p_photo_factura_url, p_photo_factura_path);
 
   update public.fuel_orders
@@ -609,20 +589,10 @@ drop policy if exists "photos admin delete" on public.order_photos;
 create policy "photos admin delete" on public.order_photos for delete to authenticated
 using (public.is_admin());
 
-drop policy if exists "evidence authenticated upload" on storage.objects;
-create policy "evidence authenticated upload" on storage.objects for insert to authenticated
-with check (bucket_id = 'evidencias-tanqueo' and (storage.foldername(name))[1] = auth.uid()::text);
-drop policy if exists "evidence authenticated read" on storage.objects;
-create policy "evidence authenticated read" on storage.objects for select to authenticated
-using (bucket_id = 'evidencias-tanqueo');
-drop policy if exists "evidence owner delete" on storage.objects;
-create policy "evidence owner delete" on storage.objects for delete to authenticated
-using (bucket_id = 'evidencias-tanqueo' and ((storage.foldername(name))[1] = auth.uid()::text or public.is_admin()));
-
 grant execute on function public.get_login_profiles() to anon, authenticated;
 grant execute on function public.expire_fuel_orders() to authenticated;
-grant execute on function public.create_fuel_order(uuid, uuid, uuid, numeric, date, date, text) to authenticated;
-grant execute on function public.execute_fuel_order(uuid, date, numeric, numeric, numeric, text, integer, text, double precision, double precision, double precision, text, text, text, text, text, text) to authenticated;
+grant execute on function public.create_fuel_order(uuid, uuid, uuid, date, date, text) to authenticated;
+grant execute on function public.execute_fuel_order(uuid, date, numeric, numeric, numeric, text, integer, text, double precision, double precision, double precision, text, text, text, text) to authenticated;
 grant execute on function public.set_admin_pin(text) to authenticated;
 grant execute on function public.delete_fuel_record(uuid) to authenticated;
 

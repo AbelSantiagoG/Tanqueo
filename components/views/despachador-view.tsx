@@ -37,7 +37,6 @@ export function DespachadorView({ embedded = false }: { embedded?: boolean }) {
   const [operatorId, setOperatorId] = useState("")
   const [vehicleId, setVehicleId] = useState("")
   const [stationId, setStationId] = useState("")
-  const [authorizedGallons, setAuthorizedGallons] = useState("")
   const [issueDate, setIssueDate] = useState(todayIso())
   const [expiryDate, setExpiryDate] = useState(todayIso())
   const [notes, setNotes] = useState("")
@@ -83,7 +82,6 @@ export function DespachadorView({ embedded = false }: { embedded?: boolean }) {
     setOperatorId("")
     setVehicleId("")
     setStationId("")
-    setAuthorizedGallons("")
     setIssueDate(issue)
     setExpiryDate(expiry.toISOString().split("T")[0])
     setNotes("")
@@ -92,11 +90,10 @@ export function DespachadorView({ embedded = false }: { embedded?: boolean }) {
 
   const createOrder = async (event: React.FormEvent) => {
     event.preventDefault()
-    if (!operatorId || !vehicleId || !stationId || !authorizedGallons || !issueDate || !expiryDate) return toast.error("Completa los campos obligatorios.")
-    if (Number(authorizedGallons) <= 0) return toast.error("Los galones autorizados deben ser mayores que cero.")
+    if (!operatorId || !vehicleId || !stationId || !issueDate || !expiryDate) return toast.error("Completa los campos obligatorios.")
     setSaving(true)
     try {
-      const order = await createFuelOrder({ operatorId, vehicleId, stationId, authorizedGallons: Number(authorizedGallons), issueDate, expiryDate, notes })
+      const order = await createFuelOrder({ operatorId, vehicleId, stationId, issueDate, expiryDate, notes })
       toast.success(`Orden ${order.num} creada correctamente.`)
       setShowCreate(false)
       await load()
@@ -176,20 +173,19 @@ export function DespachadorView({ embedded = false }: { embedded?: boolean }) {
         </TabsContent>
       </Tabs>
 
-      <Dialog open={showCreate} onOpenChange={setShowCreate}><DialogContent><DialogHeader><DialogTitle>Nueva orden de suministro</DialogTitle><DialogDescription>Define el operario, la moto, la estacion y los galones autorizados.</DialogDescription></DialogHeader><form onSubmit={createOrder} className="space-y-3">
+      <Dialog open={showCreate} onOpenChange={setShowCreate}><DialogContent><DialogHeader><DialogTitle>Nueva orden de suministro</DialogTitle><DialogDescription>Define el operario, la moto, la estacion y la vigencia de la orden.</DialogDescription></DialogHeader><form onSubmit={createOrder} className="space-y-3">
         <p className="rounded-md bg-blue-500/10 p-2 text-xs">El numero se genera en Supabase al guardar para evitar consecutivos repetidos.</p>
         <Field label="Operario"><Select value={operatorId} onValueChange={setOperatorId}><SelectTrigger><SelectValue placeholder="Selecciona operario" /></SelectTrigger><SelectContent>{operators.map((item) => <SelectItem key={item.id} value={item.id}>{item.full_name}</SelectItem>)}</SelectContent></Select></Field>
         <Field label="Moto"><Select value={vehicleId} onValueChange={setVehicleId}><SelectTrigger><SelectValue placeholder="Selecciona moto" /></SelectTrigger><SelectContent>{vehicles.map((item) => <SelectItem key={item.id} value={item.id}>{item.placa} | {item.marca}</SelectItem>)}</SelectContent></Select></Field>
         <Field label="Estacion de servicio"><Select value={stationId} onValueChange={setStationId}><SelectTrigger><SelectValue placeholder="Selecciona estacion" /></SelectTrigger><SelectContent>{stations.map((item) => <SelectItem key={item.id} value={item.id}>{item.nombre} | {item.combustible}</SelectItem>)}</SelectContent></Select></Field>
-        <Field label="Galones autorizados"><Input type="number" min="0.01" step="0.01" value={authorizedGallons} onChange={(event) => setAuthorizedGallons(event.target.value)} placeholder="Cantidad maxima autorizada" /></Field>
-        <p className="rounded-md bg-amber-500/10 p-2 text-xs">El operario registrara los galones reales y el valor total de la factura al momento del suministro.</p>
+        <p className="rounded-md bg-amber-500/10 p-2 text-xs">El operario registrara los galones suministrados y el valor total de la factura al momento del tanqueo.</p>
         <div className="grid grid-cols-2 gap-3"><Field label="Emision"><Input type="date" value={issueDate} onChange={(event) => setIssueDate(event.target.value)} /></Field><Field label="Vencimiento"><Input type="date" value={expiryDate} onChange={(event) => setExpiryDate(event.target.value)} /></Field></div>
         <Field label="Observaciones"><Textarea value={notes} onChange={(event) => setNotes(event.target.value)} /></Field>
         <Button disabled={saving} className="w-full bg-amber-600 hover:bg-amber-700">{saving ? "Guardando..." : "Crear orden"}</Button>
       </form></DialogContent></Dialog>
 
       <Dialog open={Boolean(selected)} onOpenChange={(open) => !open && setSelected(null)}><DialogContent className="max-h-[90vh] overflow-y-auto"><DialogHeader><DialogTitle>Detalle de orden {selected?.num}</DialogTitle><DialogDescription>Consulta, imprime o descarga el comprobante de la orden.</DialogDescription></DialogHeader>{selected && <div className="space-y-3 text-sm">
-        <div className="grid grid-cols-2 gap-2"><p>Estado: {badge(selected.estado)}</p><p>Vence: <strong>{formatDate(selected.fecha_vencimiento)}</strong></p><p>Operario: <strong>{selected.profiles?.full_name}</strong></p><p>Moto: <strong>{selected.vehicles?.placa}</strong></p><p>Estacion: <strong>{selected.station?.nombre || "-"}</strong></p><p>Galones autorizados: <strong>{selected.galones_autorizados ?? "-"} gal</strong></p><p>Galones registrados: <strong>{selected.galones ?? "-"} gal</strong></p><p>Valor: <strong>{formatCurrency(selected.valor_total)}</strong></p><p>Rendimiento: <strong>{selected.rendimiento_real || "-"} km/gal</strong></p></div>
+        <div className="grid grid-cols-2 gap-2"><p>Estado: {badge(selected.estado)}</p><p>Vence: <strong>{formatDate(selected.fecha_vencimiento)}</strong></p><p>Operario: <strong>{selected.profiles?.full_name}</strong></p><p>Moto: <strong>{selected.vehicles?.placa}</strong></p><p>Estacion: <strong>{selected.station?.nombre || "-"}</strong></p><p>Galones suministrados: <strong>{selected.galones ?? "-"} gal</strong></p><p>Valor: <strong>{formatCurrency(selected.valor_total)}</strong></p><p>Rendimiento: <strong>{selected.rendimiento_real || "-"} km/gal</strong></p></div>
         {selected.gps_maps_url && <a className="flex gap-1 text-blue-500 underline" href={selected.gps_maps_url} target="_blank" rel="noreferrer"><MapPin className="w-4 h-4" /> Abrir ubicacion en Google Maps</a>}
         {photos.length > 0 && <div className="grid grid-cols-3 gap-2">{photos.map((photo) => <a href={photo.photo_url} target="_blank" rel="noreferrer" key={photo.id}><img src={photo.photo_url} alt={photo.tipo} className="aspect-square w-full rounded-md object-cover" onError={(event) => { event.currentTarget.style.display = "none" }} /><small className="block text-center uppercase">{photo.tipo}</small></a>)}</div>}
         <div className="flex flex-wrap gap-2 border-t pt-3"><Button variant="outline" onClick={() => printFuelOrder(selected, settings, photos)}><Printer className="w-4 h-4 mr-1" /> Imprimir</Button><Button variant="outline" onClick={() => downloadFuelOrderPdf(selected, settings).catch((error) => toast.error(error.message))}><Download className="w-4 h-4 mr-1" /> Descargar PDF</Button>{selected.estado === "pendiente" && <Button variant="outline" onClick={() => updateStatus(selected, "cerrada")}>Cerrar orden</Button>}{selected.estado === "ejecutada" && <><Button onClick={() => updateStatus(selected, "verificado")}>Verificar</Button><Button variant="destructive" onClick={() => updateStatus(selected, "observacion")}>Observacion</Button></>} {(role === "admin" || selected.estado !== "ejecutada") && <Button variant="destructive" onClick={() => deleteOrder(selected)}><Trash2 className="w-4 h-4" /></Button>}</div>

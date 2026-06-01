@@ -14,7 +14,7 @@ import type { CompanySettings, FuelOrder, FuelRecord, OrderPhoto } from "@/lib/t
 import { Badge } from "@/components/ui/badge"
 import { Button } from "@/components/ui/button"
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card"
-import { Dialog, DialogContent, DialogHeader, DialogTitle } from "@/components/ui/dialog"
+import { Dialog, DialogContent, DialogDescription, DialogHeader, DialogTitle } from "@/components/ui/dialog"
 import { Input } from "@/components/ui/input"
 import { SchemaUpdateAlert } from "@/components/ui/schema-update-alert"
 
@@ -157,7 +157,7 @@ export function RecordsView({ operatorId, allowDelete = false, embedded = false 
         </tbody></table>
       </CardContent>
 
-      <Dialog open={Boolean(selected)} onOpenChange={(open) => !open && setSelected(null)}><DialogContent className="max-h-[90vh] overflow-y-auto"><DialogHeader><DialogTitle>Detalle de tanqueo</DialogTitle></DialogHeader>{selected && <div className="space-y-3 text-sm">
+      <Dialog open={Boolean(selected)} onOpenChange={(open) => !open && setSelected(null)}><DialogContent className="max-h-[90vh] overflow-y-auto"><DialogHeader><DialogTitle>Detalle de tanqueo</DialogTitle><DialogDescription>Consulta los datos, evidencias y comprobante del tanqueo.</DialogDescription></DialogHeader>{selected && <div className="space-y-3 text-sm">
         <div className="grid grid-cols-2 gap-2"><p>Orden: <strong>{selected.fuel_orders?.num}</strong></p><p>Fecha: <strong>{formatDate(selected.fecha)}</strong></p><p>Operario: <strong>{selected.profiles?.full_name}</strong></p><p>Cedula: <strong>{selected.profiles?.cedula || "-"}</strong></p><p>Moto: <strong>{selected.vehicles?.placa}</strong></p><p>Marca: <strong>{selected.vehicles?.marca}</strong></p><p>Estacion: <strong>{selected.station?.nombre || "-"}</strong></p><p>KM: <strong>{selected.kilometraje_actual}</strong></p><p>Galones: <strong>{selected.galones}</strong></p><p>Valor: <strong>{formatCurrency(selected.valor_total)}</strong></p><p>Nivel: <strong>{selected.nivel_tanque}</strong></p><p>Rendimiento: <strong>{selected.rendimiento_real ?? "-"} km/gal</strong></p><p>Alcance: <strong>{selected.alcance_estimado} km</strong></p></div>
         {selected.observaciones && <p className="rounded-md bg-muted p-2">{selected.observaciones}</p>}
         {selected.gps_maps_url && <a href={selected.gps_maps_url} target="_blank" rel="noreferrer" className="flex gap-1 text-blue-500 underline"><MapPin className="w-4 h-4" /> Abrir ubicacion en Google Maps</a>}

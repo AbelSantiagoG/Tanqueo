@@ -13,7 +13,7 @@ import type { CompanySettings, FuelOrder, FuelRecord, Profile, ServiceStation, U
 import { Badge } from "@/components/ui/badge"
 import { Button } from "@/components/ui/button"
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card"
-import { Dialog, DialogContent, DialogHeader, DialogTitle } from "@/components/ui/dialog"
+import { Dialog, DialogContent, DialogDescription, DialogHeader, DialogTitle } from "@/components/ui/dialog"
 import { Input } from "@/components/ui/input"
 import { Label } from "@/components/ui/label"
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select"
@@ -251,7 +251,7 @@ export function AdminView() {
         </TabsContent>
       </Tabs>
 
-      <Dialog open={showVehicle} onOpenChange={setShowVehicle}><DialogContent><DialogHeader><DialogTitle>Moto de la flota</DialogTitle></DialogHeader><form onSubmit={saveVehicle} className="grid grid-cols-2 gap-3">
+      <Dialog open={showVehicle} onOpenChange={setShowVehicle}><DialogContent><DialogHeader><DialogTitle>Moto de la flota</DialogTitle><DialogDescription>Registra o actualiza los datos de la moto.</DialogDescription></DialogHeader><form onSubmit={saveVehicle} className="grid grid-cols-2 gap-3">
         <Field label="Placa"><Input value={vehicleDraft.placa || ""} onChange={(event) => setVehicleDraft({ ...vehicleDraft, placa: event.target.value })} /></Field>
         <Field label="Marca"><Select value={vehicleDraft.marca} onValueChange={(marca) => setVehicleDraft({ ...vehicleDraft, marca, rendimiento_esperado: BRAND_YIELDS[marca] })}><SelectTrigger><SelectValue /></SelectTrigger><SelectContent>{VEHICLE_BRANDS.map((brand) => <SelectItem key={brand} value={brand}>{brand}</SelectItem>)}</SelectContent></Select></Field>
         <Field label="Modelo"><Input value={vehicleDraft.modelo || ""} onChange={(event) => setVehicleDraft({ ...vehicleDraft, modelo: event.target.value })} /></Field><Field label="Ano"><Input value={vehicleDraft.anio || ""} onChange={(event) => setVehicleDraft({ ...vehicleDraft, anio: event.target.value })} /></Field>
@@ -261,7 +261,7 @@ export function AdminView() {
         <div className="col-span-2"><Field label="Operario asignado"><Select value={vehicleDraft.operario_asignado_id || "none"} onValueChange={(value) => setVehicleDraft({ ...vehicleDraft, operario_asignado_id: value === "none" ? null : value })}><SelectTrigger><SelectValue /></SelectTrigger><SelectContent><SelectItem value="none">Sin asignar</SelectItem>{profiles.filter((profile) => profile.role === "operario").map((profile) => <SelectItem value={profile.id} key={profile.id}>{profile.full_name}</SelectItem>)}</SelectContent></Select></Field></div><Button className="col-span-2">Guardar moto</Button>
       </form></DialogContent></Dialog>
 
-      <Dialog open={showStation} onOpenChange={setShowStation}><DialogContent><DialogHeader><DialogTitle>Estacion de servicio</DialogTitle></DialogHeader><form onSubmit={saveStation} className="grid grid-cols-2 gap-3">
+      <Dialog open={showStation} onOpenChange={setShowStation}><DialogContent><DialogHeader><DialogTitle>Estacion de servicio</DialogTitle><DialogDescription>Registra o actualiza los datos de la estacion.</DialogDescription></DialogHeader><form onSubmit={saveStation} className="grid grid-cols-2 gap-3">
         <Field label="Nombre"><Input value={stationDraft.nombre || ""} onChange={(event) => setStationDraft({ ...stationDraft, nombre: event.target.value })} /></Field><Field label="NIT"><Input value={stationDraft.nit || ""} onChange={(event) => setStationDraft({ ...stationDraft, nit: event.target.value })} /></Field>
         <Field label="Direccion"><Input value={stationDraft.direccion || ""} onChange={(event) => setStationDraft({ ...stationDraft, direccion: event.target.value })} /></Field><Field label="Telefono"><Input value={stationDraft.telefono || ""} onChange={(event) => setStationDraft({ ...stationDraft, telefono: event.target.value })} /></Field>
         <Field label="Combustible"><Input value={stationDraft.combustible || ""} onChange={(event) => setStationDraft({ ...stationDraft, combustible: event.target.value })} /></Field>
@@ -269,7 +269,7 @@ export function AdminView() {
         <Button className="col-span-2">Guardar estacion</Button>
       </form></DialogContent></Dialog>
 
-      <Dialog open={showProfile} onOpenChange={setShowProfile}><DialogContent><DialogHeader><DialogTitle>Personal</DialogTitle></DialogHeader><form onSubmit={saveProfile} className="grid grid-cols-2 gap-3">
+      <Dialog open={showProfile} onOpenChange={setShowProfile}><DialogContent><DialogHeader><DialogTitle>Personal</DialogTitle><DialogDescription>Registra o actualiza la informacion del usuario.</DialogDescription></DialogHeader><form onSubmit={saveProfile} className="grid grid-cols-2 gap-3">
         <Field label="Nombre"><Input value={profileDraft.full_name || ""} onChange={(event) => setProfileDraft({ ...profileDraft, full_name: event.target.value })} /></Field><Field label="Rol"><Select value={profileDraft.role} onValueChange={(role: UserRole) => setProfileDraft({ ...profileDraft, role })}><SelectTrigger><SelectValue /></SelectTrigger><SelectContent><SelectItem value="operario">Operario</SelectItem><SelectItem value="despachador">Despachador</SelectItem><SelectItem value="admin">Administrador</SelectItem></SelectContent></Select></Field>
         <Field label="Cedula"><Input value={profileDraft.cedula || ""} onChange={(event) => setProfileDraft({ ...profileDraft, cedula: event.target.value })} /></Field><Field label="Telefono"><Input value={profileDraft.telefono || ""} onChange={(event) => setProfileDraft({ ...profileDraft, telefono: event.target.value })} /></Field>
         <Field label="Correo"><Input type="email" value={profileDraft.email || ""} onChange={(event) => setProfileDraft({ ...profileDraft, email: event.target.value })} /></Field><Field label="Cargo"><Input value={profileDraft.cargo || ""} onChange={(event) => setProfileDraft({ ...profileDraft, cargo: event.target.value })} /></Field>

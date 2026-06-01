@@ -13,7 +13,7 @@ import type { CompanySettings, FuelOrder, OrderPhoto, Profile, ServiceStation, V
 import { Badge } from "@/components/ui/badge"
 import { Button } from "@/components/ui/button"
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card"
-import { Dialog, DialogContent, DialogHeader, DialogTitle } from "@/components/ui/dialog"
+import { Dialog, DialogContent, DialogDescription, DialogHeader, DialogTitle } from "@/components/ui/dialog"
 import { Input } from "@/components/ui/input"
 import { Label } from "@/components/ui/label"
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select"
@@ -176,7 +176,7 @@ export function DespachadorView({ embedded = false }: { embedded?: boolean }) {
         </TabsContent>
       </Tabs>
 
-      <Dialog open={showCreate} onOpenChange={setShowCreate}><DialogContent><DialogHeader><DialogTitle>Nueva orden de suministro</DialogTitle></DialogHeader><form onSubmit={createOrder} className="space-y-3">
+      <Dialog open={showCreate} onOpenChange={setShowCreate}><DialogContent><DialogHeader><DialogTitle>Nueva orden de suministro</DialogTitle><DialogDescription>Define el operario, la moto, la estacion y los galones autorizados.</DialogDescription></DialogHeader><form onSubmit={createOrder} className="space-y-3">
         <p className="rounded-md bg-blue-500/10 p-2 text-xs">El numero se genera en Supabase al guardar para evitar consecutivos repetidos.</p>
         <Field label="Operario"><Select value={operatorId} onValueChange={setOperatorId}><SelectTrigger><SelectValue placeholder="Selecciona operario" /></SelectTrigger><SelectContent>{operators.map((item) => <SelectItem key={item.id} value={item.id}>{item.full_name}</SelectItem>)}</SelectContent></Select></Field>
         <Field label="Moto"><Select value={vehicleId} onValueChange={setVehicleId}><SelectTrigger><SelectValue placeholder="Selecciona moto" /></SelectTrigger><SelectContent>{vehicles.map((item) => <SelectItem key={item.id} value={item.id}>{item.placa} | {item.marca}</SelectItem>)}</SelectContent></Select></Field>
@@ -188,7 +188,7 @@ export function DespachadorView({ embedded = false }: { embedded?: boolean }) {
         <Button disabled={saving} className="w-full bg-amber-600 hover:bg-amber-700">{saving ? "Guardando..." : "Crear orden"}</Button>
       </form></DialogContent></Dialog>
 
-      <Dialog open={Boolean(selected)} onOpenChange={(open) => !open && setSelected(null)}><DialogContent className="max-h-[90vh] overflow-y-auto"><DialogHeader><DialogTitle>Detalle de orden {selected?.num}</DialogTitle></DialogHeader>{selected && <div className="space-y-3 text-sm">
+      <Dialog open={Boolean(selected)} onOpenChange={(open) => !open && setSelected(null)}><DialogContent className="max-h-[90vh] overflow-y-auto"><DialogHeader><DialogTitle>Detalle de orden {selected?.num}</DialogTitle><DialogDescription>Consulta, imprime o descarga el comprobante de la orden.</DialogDescription></DialogHeader>{selected && <div className="space-y-3 text-sm">
         <div className="grid grid-cols-2 gap-2"><p>Estado: {badge(selected.estado)}</p><p>Vence: <strong>{formatDate(selected.fecha_vencimiento)}</strong></p><p>Operario: <strong>{selected.profiles?.full_name}</strong></p><p>Moto: <strong>{selected.vehicles?.placa}</strong></p><p>Estacion: <strong>{selected.station?.nombre || "-"}</strong></p><p>Galones autorizados: <strong>{selected.galones_autorizados ?? "-"} gal</strong></p><p>Galones registrados: <strong>{selected.galones ?? "-"} gal</strong></p><p>Valor: <strong>{formatCurrency(selected.valor_total)}</strong></p><p>Rendimiento: <strong>{selected.rendimiento_real || "-"} km/gal</strong></p></div>
         {selected.gps_maps_url && <a className="flex gap-1 text-blue-500 underline" href={selected.gps_maps_url} target="_blank" rel="noreferrer"><MapPin className="w-4 h-4" /> Abrir ubicacion en Google Maps</a>}
         {photos.length > 0 && <div className="grid grid-cols-3 gap-2">{photos.map((photo) => <a href={photo.photo_url} target="_blank" rel="noreferrer" key={photo.id}><img src={photo.photo_url} alt={photo.tipo} className="aspect-square w-full rounded-md object-cover" onError={(event) => { event.currentTarget.style.display = "none" }} /><small className="block text-center uppercase">{photo.tipo}</small></a>)}</div>}

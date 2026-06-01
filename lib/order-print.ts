@@ -125,20 +125,25 @@ export async function downloadFuelOrderPdf(order: FuelOrder, settings?: CompanyS
     import("html2canvas"),
     import("jspdf"),
   ])
-  const wrapper = document.createElement("div")
-  wrapper.style.cssText = "position:fixed;left:-10000px;top:0;width:8.5in;height:5.5in;background:#fff"
-  wrapper.innerHTML = buildFuelOrderDocument(order, settings)
-  document.body.appendChild(wrapper)
+  const frame = document.createElement("iframe")
+  frame.title = "Documento PDF temporal"
+  frame.style.cssText = "position:fixed;left:-10000px;top:0;width:8.5in;height:5.5in;border:0"
+  document.body.appendChild(frame)
 
   try {
-    await waitForImages(wrapper)
-    const documentElement = wrapper.querySelector<HTMLElement>("#fuel-order-document")
+    const frameDocument = frame.contentDocument
+    if (!frameDocument) throw new Error("No fue posible preparar el documento.")
+    frameDocument.open()
+    frameDocument.write(`<!doctype html><html><head><meta charset="utf-8"><style>html,body{margin:0;background:#fff}</style></head><body>${buildFuelOrderDocument(order, settings)}</body></html>`)
+    frameDocument.close()
+    await waitForImages(frameDocument)
+    const documentElement = frameDocument.querySelector<HTMLElement>("#fuel-order-document")
     if (!documentElement) throw new Error("No fue posible preparar el documento.")
     const canvas = await html2canvas(documentElement, { backgroundColor: "#ffffff", scale: 2, useCORS: true })
     const pdf = new jsPDF({ orientation: "landscape", unit: "in", format: [8.5, 5.5], compress: true })
     pdf.addImage(canvas.toDataURL("image/png"), "PNG", 0, 0, 8.5, 5.5, undefined, "FAST")
     pdf.save(`${safeFileName(order.num)}.pdf`)
   } finally {
-    wrapper.remove()
+    frame.remove()
   }
 }

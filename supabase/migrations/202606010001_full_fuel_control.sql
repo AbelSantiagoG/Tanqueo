@@ -96,6 +96,7 @@ create table if not exists public.fuel_orders (
 
 alter table public.fuel_orders add column if not exists despachador_id uuid references public.profiles(id) on delete set null;
 alter table public.fuel_orders add column if not exists station_id uuid references public.service_stations(id) on delete restrict;
+alter table public.fuel_orders add column if not exists galones_autorizados numeric(10, 2) not null default 0;
 alter table public.fuel_orders add column if not exists galones numeric(10, 2);
 alter table public.fuel_orders add column if not exists valor_total numeric(14, 2);
 alter table public.fuel_orders add column if not exists kilometraje_actual numeric(14, 2);
@@ -119,8 +120,6 @@ drop function if exists public.create_fuel_order(uuid, uuid, numeric, date, date
 drop function if exists public.create_fuel_order(uuid, uuid, uuid, numeric, date, date, text);
 drop function if exists public.create_fuel_order(uuid, uuid, uuid, date, date, text);
 drop function if exists public.execute_fuel_order(uuid, date, numeric, numeric, numeric, text, integer, text, double precision, double precision, double precision, text, text, text, text, text, text);
-
-alter table public.fuel_orders drop column if exists galones_autorizados;
 
 -- Older installations used execution fields as required order fields. They must
 -- remain empty while an order is pending.
@@ -293,6 +292,7 @@ create or replace function public.create_fuel_order(
   p_operator_id uuid,
   p_vehicle_id uuid,
   p_station_id uuid,
+  p_galones_autorizados numeric,
   p_fecha_emision date,
   p_fecha_vencimiento date,
   p_observaciones text default null
@@ -317,6 +317,9 @@ begin
   if p_fecha_vencimiento < p_fecha_emision then
     raise exception 'La fecha de vencimiento no puede ser anterior a la emision';
   end if;
+  if p_galones_autorizados <= 0 then
+    raise exception 'Los galones autorizados deben ser mayores que cero';
+  end if;
 
   select * into cfg from public.company_settings order by created_at limit 1;
   select * into vehicle from public.vehicles where id = p_vehicle_id and activo = true;
@@ -337,10 +340,10 @@ begin
   generated_num := coalesce(cfg.prefix, 'OS') || '-' || year_value || '-' || lpad(next_value::text, 4, '0');
 
   insert into public.fuel_orders (
-    num, operator_id, vehicle_id, station_id, despachador_id,
+    num, operator_id, vehicle_id, station_id, despachador_id, galones_autorizados,
     rendimiento_esperado, fecha_emision, fecha_vencimiento, observaciones, estado
   ) values (
-    generated_num, p_operator_id, p_vehicle_id, p_station_id, auth.uid(),
+    generated_num, p_operator_id, p_vehicle_id, p_station_id, auth.uid(), p_galones_autorizados,
     vehicle.rendimiento_esperado, p_fecha_emision, p_fecha_vencimiento,
     nullif(trim(p_observaciones), ''), 'pendiente'
   )
@@ -396,6 +399,9 @@ begin
   end if;
   if p_kilometraje_actual <= 0 or p_galones <= 0 or p_valor_total <= 0 then
     raise exception 'Kilometraje, galones y valor deben ser mayores que cero';
+  end if;
+  if selected_order.galones_autorizados > 0 and p_galones > selected_order.galones_autorizados then
+    raise exception 'Los galones suministrados no pueden superar los autorizados';
   end if;
   if p_photo_odometro_url is null or p_photo_tanque_url is null or p_photo_factura_url is null then
     raise exception 'Las tres evidencias fotograficas son obligatorias';
@@ -615,7 +621,7 @@ using (bucket_id = 'evidencias-tanqueo' and ((storage.foldername(name))[1] = aut
 
 grant execute on function public.get_login_profiles() to anon, authenticated;
 grant execute on function public.expire_fuel_orders() to authenticated;
-grant execute on function public.create_fuel_order(uuid, uuid, uuid, date, date, text) to authenticated;
+grant execute on function public.create_fuel_order(uuid, uuid, uuid, numeric, date, date, text) to authenticated;
 grant execute on function public.execute_fuel_order(uuid, date, numeric, numeric, numeric, text, integer, text, double precision, double precision, double precision, text, text, text, text, text, text) to authenticated;
 grant execute on function public.set_admin_pin(text) to authenticated;
 grant execute on function public.delete_fuel_record(uuid) to authenticated;

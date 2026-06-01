@@ -1,5 +1,6 @@
 "use client"
 
+import { useEffect } from "react"
 import {
   DropdownMenu,
   DropdownMenuContent,
@@ -56,6 +57,10 @@ export function AppHeader({ onMenuToggle }: AppHeaderProps) {
   const config = roleConfig[currentRole as keyof typeof roleConfig]
   const Icon = config?.icon || User
   const { theme, setTheme } = useTheme()
+
+  useEffect(() => {
+    router.prefetch("/login")
+  }, [router])
 
   const toggleTheme = () => {
     setTheme(theme === "dark" ? "light" : "dark")
@@ -127,9 +132,9 @@ export function AppHeader({ onMenuToggle }: AppHeaderProps) {
               </DropdownMenuLabel>
               <DropdownMenuSeparator className="bg-border/50" />
               <DropdownMenuItem
-                onClick={async () => {
-                  await logout()
-                  router.push("/login")
+                onClick={() => {
+                  router.replace("/login")
+                  void logout().catch(console.error)
                 }}
                 className="flex items-center gap-2 text-destructive cursor-pointer"
               >

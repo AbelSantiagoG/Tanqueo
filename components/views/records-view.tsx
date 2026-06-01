@@ -6,7 +6,7 @@ import { Download, Eye, MapPin, Printer, Search, Trash2 } from "lucide-react"
 import { toast } from "sonner"
 import { loadFuelRecords } from "@/lib/fuel-service"
 import { formatCurrency, formatDate } from "@/lib/fuel-utils"
-import { printFuelOrder } from "@/lib/order-print"
+import { downloadFuelOrderPdf, printFuelOrder } from "@/lib/order-print"
 import { removeEvidence } from "@/lib/storage"
 import { supabase } from "@/lib/supabase"
 import { hasStationSchema } from "@/lib/schema-capabilities"
@@ -162,7 +162,7 @@ export function RecordsView({ operatorId, allowDelete = false, embedded = false 
         {selected.observaciones && <p className="rounded-md bg-muted p-2">{selected.observaciones}</p>}
         {selected.gps_maps_url && <a href={selected.gps_maps_url} target="_blank" rel="noreferrer" className="flex gap-1 text-blue-500 underline"><MapPin className="w-4 h-4" /> Abrir ubicacion en Google Maps</a>}
         <div className="grid grid-cols-3 gap-2">{(selected.order_photos || []).map((photo) => <a href={photo.photo_url} target="_blank" rel="noreferrer" key={photo.id}><img src={photo.photo_url} alt={photo.tipo} className="aspect-square w-full rounded-md object-cover" onError={(event) => { event.currentTarget.style.display = "none" }} /><small className="block text-center uppercase">{photo.tipo}</small></a>)}</div>
-        <div className="flex gap-2 border-t pt-3">{orderFor(selected) && <Button variant="outline" onClick={() => printFuelOrder(orderFor(selected)!, settings, selected.order_photos)}><Printer className="w-4 h-4 mr-1" /> PDF / Imprimir</Button>}{allowDelete && <Button variant="destructive" onClick={() => deleteRecord(selected)}><Trash2 className="w-4 h-4 mr-1" /> Eliminar</Button>}</div>
+        <div className="flex flex-wrap gap-2 border-t pt-3">{orderFor(selected) && <><Button variant="outline" onClick={() => printFuelOrder(orderFor(selected)!, settings, selected.order_photos)}><Printer className="w-4 h-4 mr-1" /> Imprimir</Button><Button variant="outline" onClick={() => downloadFuelOrderPdf(orderFor(selected)!, settings).catch((error) => toast.error(error.message))}><Download className="w-4 h-4 mr-1" /> Descargar PDF</Button></>}{allowDelete && <Button variant="destructive" onClick={() => deleteRecord(selected)}><Trash2 className="w-4 h-4 mr-1" /> Eliminar</Button>}</div>
       </div>}</DialogContent></Dialog>
       </Card>
     </div>

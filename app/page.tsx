@@ -11,9 +11,9 @@ export default function HomeRedirect() {
   useEffect(() => {
     if (!isLoading) {
       if (isAuthenticated && role) {
-        router.push(`/${role}`);
+        router.replace(`/${role}`);
       } else {
-        router.push("/login");
+        router.replace("/login");
       }
     }
   }, [isLoading, isAuthenticated, role, router]);

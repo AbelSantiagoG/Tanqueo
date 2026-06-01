@@ -7,7 +7,7 @@
 
 La migracion conserva los datos existentes, agrega `service_stations` y `fuel_records`, crea el bucket publico `evidencias-tanqueo`, aplica RLS y define las RPC requeridas. Tambien corrige instalaciones antiguas donde `fuel_orders.galones` quedo obligatorio: una orden pendiente todavia no tiene galones reales.
 
-El despachador crea la orden sin fijar cantidad ni precio. El operario registra manualmente los galones suministrados y el valor total de la factura al ejecutar la orden.
+El despachador crea la orden indicando los galones autorizados. El operario registra manualmente los galones realmente suministrados y el valor total de la factura al ejecutar la orden.
 
 Puedes ejecutar nuevamente la migracion completa si ya habias aplicado una version anterior. Las operaciones son idempotentes y migran la estacion configurada anteriormente a la nueva lista de estaciones.
 

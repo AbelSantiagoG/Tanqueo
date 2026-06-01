@@ -21,13 +21,13 @@ export default function DashboardLayout({
   useEffect(() => {
     if (!isLoading) {
       if (!isAuthenticated) {
-        router.push("/login");
+        router.replace("/login");
       } else if (role) {
         const pathSegments = pathname.split("/").filter(Boolean);
         const primarySegment = pathSegments[0]; // e.g. "operario", "despachador", "admin"
         
         if (primarySegment && primarySegment !== role) {
-          router.push(`/${role}`);
+          router.replace(`/${role}`);
         }
       }
     }

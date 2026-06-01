@@ -44,6 +44,11 @@ export function LoginView() {
     setErrorMsg("")
   }
 
+  const selectRole = (selectedRole: UserRole) => {
+    router.prefetch(`/${selectedRole}`)
+    setRole(selectedRole)
+  }
+
   const submit = async (event: React.FormEvent) => {
     event.preventDefault()
     setErrorMsg("")
@@ -54,7 +59,7 @@ export function LoginView() {
     try {
       const profile = await loginWithCredentials(email, password, selected?.id)
       if (role && profile.role !== role) throw new Error("El perfil autenticado no tiene el rol seleccionado.")
-      router.push(`/${profile.role}`)
+      router.replace(`/${profile.role}`)
     } catch (error: any) {
       setErrorMsg(error.message || "No fue posible iniciar sesion.")
     } finally {
@@ -75,13 +80,13 @@ export function LoginView() {
         <CardContent>
           {!role ? (
             <div className="space-y-3">
-              <Button onClick={() => setRole("operario")} className="w-full justify-start py-6 bg-emerald-600 hover:bg-emerald-700">
+              <Button onClick={() => selectRole("operario")} className="w-full justify-start py-6 bg-emerald-600 hover:bg-emerald-700">
                 <User className="mr-3 w-5 h-5" /> Soy Operario
               </Button>
-              <Button onClick={() => setRole("despachador")} className="w-full justify-start py-6 bg-amber-600 hover:bg-amber-700">
+              <Button onClick={() => selectRole("despachador")} className="w-full justify-start py-6 bg-amber-600 hover:bg-amber-700">
                 <Truck className="mr-3 w-5 h-5" /> Soy Despachador
               </Button>
-              <Button onClick={() => setRole("admin")} className="w-full justify-start py-6 bg-blue-800 hover:bg-blue-900">
+              <Button onClick={() => selectRole("admin")} className="w-full justify-start py-6 bg-blue-800 hover:bg-blue-900">
                 <Shield className="mr-3 w-5 h-5" /> Administrador
               </Button>
               {errorMsg && <p className="text-xs text-red-600 text-center">{errorMsg}</p>}

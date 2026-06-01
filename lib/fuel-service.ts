@@ -11,6 +11,7 @@ export async function createFuelOrder(input: {
   operatorId: string
   vehicleId: string
   stationId: string
+  authorizedGallons: number
   issueDate: string
   expiryDate: string
   notes?: string
@@ -21,6 +22,7 @@ export async function createFuelOrder(input: {
       p_operator_id: input.operatorId,
       p_vehicle_id: input.vehicleId,
       p_station_id: input.stationId,
+      p_galones_autorizados: input.authorizedGallons,
       p_fecha_emision: input.issueDate,
       p_fecha_vencimiento: input.expiryDate,
       p_observaciones: input.notes || null,

@@ -1,0 +1,311 @@
+"use client"
+
+import { useCallback, useEffect, useMemo, useRef, useState } from "react"
+import { AlertTriangle, ArrowLeft, Camera, CheckCircle, ChevronRight, Clock, Gauge, MapPin, Printer, Upload, X } from "lucide-react"
+import { toast } from "sonner"
+import { useAuth } from "@/lib/auth-context"
+import { executeFuelOrder, expireFuelOrders, loadFuelRecords } from "@/lib/fuel-service"
+import { FUEL_LEVELS, formatCurrency, formatDate, todayIso } from "@/lib/fuel-utils"
+import { printFuelOrder } from "@/lib/order-print"
+import { hasStationSchema } from "@/lib/schema-capabilities"
+import { removeEvidence, uploadEvidence } from "@/lib/storage"
+import { supabase } from "@/lib/supabase"
+import type { CompanySettings, FuelOrder, FuelRecord, OrderPhoto, PhotoType, UploadedEvidence } from "@/lib/types"
+import { Badge } from "@/components/ui/badge"
+import { Button } from "@/components/ui/button"
+import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card"
+import { Dialog, DialogContent, DialogHeader, DialogTitle } from "@/components/ui/dialog"
+import { Input } from "@/components/ui/input"
+import { Label } from "@/components/ui/label"
+import { Textarea } from "@/components/ui/textarea"
+import { SchemaUpdateAlert } from "@/components/ui/schema-update-alert"
+
+type GpsStatus = "idle" | "searching" | "captured" | "error"
+type PhotoState = Record<PhotoType, string | null>
+
+const PHOTO_LABELS: Record<PhotoType, string> = {
+  odometro: "Odometro",
+  tanque: "Tablero / nivel",
+  factura: "Factura",
+}
+
+const EMPTY_PHOTOS: PhotoState = { odometro: null, tanque: null, factura: null }
+
+export function OperarioView() {
+  const { user } = useAuth()
+  const [settings, setSettings] = useState<CompanySettings | null>(null)
+  const [orders, setOrders] = useState<FuelOrder[]>([])
+  const [records, setRecords] = useState<FuelRecord[]>([])
+  const [selectedOrder, setSelectedOrder] = useState<FuelOrder | null>(null)
+  const [previousRecord, setPreviousRecord] = useState<FuelRecord | null>(null)
+  const [date, setDate] = useState(todayIso())
+  const [mileage, setMileage] = useState("")
+  const [gallons, setGallons] = useState("")
+  const [invoiceValue, setInvoiceValue] = useState("")
+  const [notes, setNotes] = useState("")
+  const [fuelLevelIndex, setFuelLevelIndex] = useState<number | null>(null)
+  const [photos, setPhotos] = useState<PhotoState>(EMPTY_PHOTOS)
+  const [gpsStatus, setGpsStatus] = useState<GpsStatus>("idle")
+  const [gps, setGps] = useState<{ lat: number; lng: number; accuracy: number } | null>(null)
+  const [showReview, setShowReview] = useState(false)
+  const [receipt, setReceipt] = useState<{ record: FuelRecord; order: FuelOrder; photos: OrderPhoto[] } | null>(null)
+  const [isSaving, setIsSaving] = useState(false)
+  const [stationSchemaReady, setStationSchemaReady] = useState(true)
+  const userId = user?.id
+  const fileRefs = {
+    odometro: useRef<HTMLInputElement>(null),
+    tanque: useRef<HTMLInputElement>(null),
+    factura: useRef<HTMLInputElement>(null),
+  }
+
+  const loadData = useCallback(async () => {
+    if (!userId) return
+    try {
+      const hasStations = await hasStationSchema()
+      setStationSchemaReady(hasStations)
+      await expireFuelOrders()
+      const orderSelect: string = hasStations ? "*, vehicles(*), station:station_id(*), profiles:operator_id(*), despachador:despachador_id(*)" : "*, vehicles(*), profiles:operator_id(*), despachador:despachador_id(*)"
+      const [settingsResult, ordersResult, recordsResult] = await Promise.all([
+        supabase.from("company_settings").select("*").limit(1).maybeSingle(),
+        supabase
+          .from("fuel_orders")
+          .select(orderSelect)
+          .eq("operator_id", userId)
+          .order("created_at", { ascending: false }),
+        loadFuelRecords(userId, { stationSchemaReady: hasStations }),
+      ])
+      if (settingsResult.error) throw settingsResult.error
+      if (ordersResult.error) throw ordersResult.error
+      setSettings(settingsResult.data as CompanySettings | null)
+      setOrders((ordersResult.data || []) as unknown as FuelOrder[])
+      setRecords(recordsResult)
+    } catch (error: any) {
+      console.error(error)
+      toast.error(error.message || "No fue posible cargar tus ordenes.")
+    }
+  }, [userId])
+
+  useEffect(() => {
+    loadData()
+  }, [loadData])
+
+  const activeOrders = orders.filter((order) => order.estado === "pendiente" || order.estado === "vencida")
+  const recentRecords = records.slice(0, 5)
+  const expectedYield = selectedOrder?.vehicles?.rendimiento_esperado || selectedOrder?.rendimiento_esperado || 50
+  const projectedRange = Number(gallons) > 0 ? Math.round(Number(gallons) * expectedYield) : 0
+  const calculatedYield = useMemo(() => {
+    if (!previousRecord || !mileage || previousRecord.galones <= 0) return null
+    const distance = Number(mileage) - previousRecord.kilometraje_actual
+    return distance > 0 ? Math.round((distance / previousRecord.galones) * 10) / 10 : null
+  }, [mileage, previousRecord])
+
+  const selectOrder = async (order: FuelOrder) => {
+    if (order.estado !== "pendiente") return toast.error("La orden vencida no puede ejecutarse.")
+    setSelectedOrder(order)
+    setDate(todayIso())
+    setMileage("")
+    setGallons("")
+    setInvoiceValue("")
+    setNotes("")
+    setFuelLevelIndex(null)
+    setPhotos(EMPTY_PHOTOS)
+    setGps(null)
+    setGpsStatus("idle")
+    const { data, error } = await supabase
+      .from("fuel_records")
+      .select("*")
+      .eq("vehicle_id", order.vehicle_id)
+      .order("created_at", { ascending: false })
+      .limit(1)
+      .maybeSingle()
+    if (error) console.error(error)
+    setPreviousRecord((data as FuelRecord | null) || null)
+  }
+
+  const captureGps = () => {
+    if (!navigator.geolocation) return toast.error("Este navegador no ofrece ubicacion GPS.")
+    setGpsStatus("searching")
+    navigator.geolocation.getCurrentPosition(
+      ({ coords }) => {
+        setGps({ lat: coords.latitude, lng: coords.longitude, accuracy: coords.accuracy })
+        setGpsStatus("captured")
+        toast.success(`Ubicacion capturada con precision aproximada de ${Math.round(coords.accuracy)} m.`)
+      },
+      (error) => {
+        console.error(error)
+        setGps(null)
+        setGpsStatus("error")
+        toast.error(error.code === 1 ? "Permiso GPS denegado." : "No se pudo capturar la ubicacion.")
+      },
+      { enableHighAccuracy: true, timeout: 15000, maximumAge: 0 },
+    )
+  }
+
+  const readPhoto = (type: PhotoType, file?: File) => {
+    if (!file) return
+    if (!file.type.startsWith("image/")) return toast.error("Selecciona un archivo de imagen.")
+    const reader = new FileReader()
+    reader.onload = () => {
+      const image = new Image()
+      image.onload = () => {
+        const max = 1200
+        const ratio = Math.min(1, max / Math.max(image.width, image.height))
+        const canvas = document.createElement("canvas")
+        canvas.width = Math.round(image.width * ratio)
+        canvas.height = Math.round(image.height * ratio)
+        canvas.getContext("2d")?.drawImage(image, 0, 0, canvas.width, canvas.height)
+        setPhotos((current) => ({ ...current, [type]: canvas.toDataURL("image/jpeg", 0.75) }))
+      }
+      image.src = String(reader.result)
+    }
+    reader.readAsDataURL(file)
+  }
+
+  const validate = () => {
+    if (!selectedOrder) return "Selecciona una orden."
+    if (!date || Number(mileage) <= 0 || Number(gallons) <= 0 || Number(invoiceValue) <= 0) return "Completa fecha, kilometraje, galones y valor de factura."
+    if (previousRecord && Number(mileage) <= previousRecord.kilometraje_actual) return `El kilometraje debe superar ${previousRecord.kilometraje_actual} km.`
+    if (!gps) return "Captura la ubicacion GPS."
+    if (fuelLevelIndex === null) return "Selecciona el nivel final del tanque."
+    if (Object.values(photos).some((photo) => !photo)) return "Carga las fotos de odometro, tanque y factura."
+    return null
+  }
+
+  const openReview = () => {
+    const error = validate()
+    if (error) return toast.error(error)
+    setShowReview(true)
+  }
+
+  const confirm = async () => {
+    if (!selectedOrder || !user || !gps || fuelLevelIndex === null) return
+    const error = validate()
+    if (error) return toast.error(error)
+    setIsSaving(true)
+    setShowReview(false)
+    const toastId = toast.loading("Subiendo evidencias...")
+    const uploaded: UploadedEvidence[] = []
+    try {
+      const odometro = await uploadEvidence(user.id, selectedOrder.id, "odometro", photos.odometro!)
+      uploaded.push(odometro)
+      const tanque = await uploadEvidence(user.id, selectedOrder.id, "tanque", photos.tanque!)
+      uploaded.push(tanque)
+      const factura = await uploadEvidence(user.id, selectedOrder.id, "factura", photos.factura!)
+      uploaded.push(factura)
+      toast.loading("Guardando tanqueo y actualizando orden...", { id: toastId })
+      const record = await executeFuelOrder({
+        orderId: selectedOrder.id,
+        date,
+        mileage: Number(mileage),
+        gallons: Number(gallons),
+        invoiceValue: Number(invoiceValue),
+        fuelLevel: FUEL_LEVELS[fuelLevelIndex].label,
+        fuelLevelPercentage: FUEL_LEVELS[fuelLevelIndex].val,
+        notes,
+        gps,
+        evidence: { odometro, tanque, factura },
+      })
+      const executedOrder: FuelOrder = {
+        ...selectedOrder,
+        estado: "ejecutada",
+        fecha_ejecucion: date,
+        galones: record.galones,
+        valor_total: record.valor_total,
+        kilometraje_actual: record.kilometraje_actual,
+        rendimiento_real: record.rendimiento_real,
+        alcance_estimado: record.alcance_estimado,
+        nivel_tanque: record.nivel_tanque,
+        alerta_rendimiento: record.alerta_rendimiento,
+      }
+      const storedPhotos = [
+        { id: odometro.path, order_id: selectedOrder.id, record_id: record.id, tipo: "odometro", photo_url: odometro.url, storage_path: odometro.path },
+        { id: tanque.path, order_id: selectedOrder.id, record_id: record.id, tipo: "tanque", photo_url: tanque.url, storage_path: tanque.path },
+        { id: factura.path, order_id: selectedOrder.id, record_id: record.id, tipo: "factura", photo_url: factura.url, storage_path: factura.path },
+      ] as OrderPhoto[]
+      setReceipt({ record, order: executedOrder, photos: storedPhotos })
+      setSelectedOrder(null)
+      await loadData()
+      toast.success("Tanqueo registrado y orden ejecutada.", { id: toastId })
+    } catch (requestError: any) {
+      await removeEvidence(uploaded.map((item) => item.path))
+      console.error(requestError)
+      toast.error(requestError.message || "No se pudo registrar el tanqueo.", { id: toastId })
+    } finally {
+      setIsSaving(false)
+    }
+  }
+
+  const printRecord = async (record: FuelRecord) => {
+    const order = orders.find((item) => item.id === record.order_id) || record.fuel_orders
+    if (!order) return toast.error("No se encontro la orden asociada.")
+    const { data } = await supabase.from("order_photos").select("*").eq("order_id", record.order_id)
+    printFuelOrder({ ...order, estado: "ejecutada", ...record }, settings, (data || []) as OrderPhoto[])
+  }
+
+  return (
+    <div className="max-w-4xl mx-auto space-y-5">
+      {!stationSchemaReady && <SchemaUpdateAlert />}
+      <div className="grid gap-3">
+        <Card><CardContent className="p-4"><p className="text-xs text-muted-foreground uppercase">Operario activo</p><p className="font-bold">{user?.full_name}</p></CardContent></Card>
+      </div>
+
+      {!selectedOrder ? (
+        <>
+          <Card>
+            <CardHeader><CardTitle className="flex gap-2"><Clock className="w-5 h-5 text-amber-500" /> Mis ordenes asignadas</CardTitle></CardHeader>
+            <CardContent className="p-0">
+              {!activeOrders.length ? <p className="p-8 text-center text-muted-foreground">No tienes ordenes pendientes ni vencidas.</p> : activeOrders.map((order) => (
+                <button key={order.id} onClick={() => selectOrder(order)} className="w-full flex items-center justify-between gap-3 border-t p-4 text-left hover:bg-muted/40">
+                  <div><strong className="font-mono">{order.num}</strong><p className="text-xs text-muted-foreground">{order.vehicles?.placa} | {order.station?.nombre || "Sin estacion"} | vence {formatDate(order.fecha_vencimiento)}</p></div>
+                  <div className="flex items-center gap-2"><Badge variant={order.estado === "vencida" ? "destructive" : "secondary"}>{order.estado}</Badge><ChevronRight className="w-4 h-4" /></div>
+                </button>
+              ))}
+            </CardContent>
+          </Card>
+          <Card>
+            <CardHeader><CardTitle className="flex gap-2"><CheckCircle className="w-5 h-5 text-emerald-500" /> Ultimos registros</CardTitle></CardHeader>
+            <CardContent className="p-0">
+              {!recentRecords.length ? <p className="p-8 text-center text-muted-foreground">Aun no hay tanqueos registrados.</p> : recentRecords.map((record) => (
+                <div key={record.id} className="flex items-center justify-between border-t p-4">
+                  <div><strong>{record.vehicles?.placa}</strong><p className="text-xs text-muted-foreground">{formatDate(record.fecha)} | {record.galones} gal | {formatCurrency(record.valor_total)}</p></div>
+                  <Button variant="outline" size="icon" onClick={() => printRecord(record)}><Printer className="w-4 h-4" /></Button>
+                </div>
+              ))}
+            </CardContent>
+          </Card>
+        </>
+      ) : (
+        <Card>
+          <CardHeader className="border-b"><CardTitle className="flex items-center gap-2"><Button variant="ghost" size="icon" onClick={() => setSelectedOrder(null)}><ArrowLeft className="w-4 h-4" /></Button> Registrar tanqueo | {selectedOrder.num}</CardTitle></CardHeader>
+          <CardContent className="space-y-5 pt-5">
+            <div className="grid grid-cols-1 sm:grid-cols-3 gap-2 rounded-lg bg-blue-500/10 p-3 text-center text-sm"><div>Moto<strong className="block">{selectedOrder.vehicles?.placa}</strong></div><div>Estacion<strong className="block">{selectedOrder.station?.nombre || "-"}</strong></div><div>Rendimiento esperado<strong className="block">{expectedYield} km/gal</strong></div></div>
+            <div className="grid sm:grid-cols-2 gap-4">
+              <Field label="Fecha"><Input type="date" value={date} onChange={(event) => setDate(event.target.value)} /></Field>
+              <Field label="Kilometraje actual"><Input type="number" value={mileage} onChange={(event) => setMileage(event.target.value)} /></Field>
+              <Field label="Galones suministrados"><Input type="number" step="0.01" value={gallons} onChange={(event) => setGallons(event.target.value)} placeholder="Ingresa los galones de la factura" /></Field>
+              <Field label="Valor total de la factura"><Input type="number" value={invoiceValue} onChange={(event) => setInvoiceValue(event.target.value)} placeholder="Ingresa el valor pagado" /></Field>
+            </div>
+            <Field label="Observaciones"><Textarea value={notes} onChange={(event) => setNotes(event.target.value)} /></Field>
+            <div className="rounded-lg border p-3 text-sm"><Gauge className="inline w-4 h-4 mr-1" /> Alcance estimado: <strong>{projectedRange} km</strong> | Rendimiento real: <strong>{calculatedYield ?? "sin historial previo"}{calculatedYield ? " km/gal" : ""}</strong></div>
+            <div className="space-y-2"><Label>GPS</Label><div className="flex gap-2"><Input readOnly value={gps ? `${gps.lat.toFixed(6)}, ${gps.lng.toFixed(6)} (+/- ${Math.round(gps.accuracy)} m)` : gpsStatus === "searching" ? "Buscando ubicacion..." : gpsStatus === "error" ? "Error de ubicacion" : "Sin ubicacion"} /><Button type="button" variant="outline" onClick={captureGps} disabled={gpsStatus === "searching"}><MapPin className="w-4 h-4 mr-1" /> Capturar</Button></div></div>
+            <div className="space-y-2"><Label>Evidencias fotograficas</Label><div className="grid grid-cols-3 gap-3">{(Object.keys(photos) as PhotoType[]).map((type) => (
+              <div key={type}>
+                <input ref={fileRefs[type]} type="file" accept="image/*" capture="environment" className="hidden" onChange={(event) => readPhoto(type, event.target.files?.[0])} />
+                {photos[type] ? <div className="relative aspect-square overflow-hidden rounded-lg border"><img src={photos[type]!} alt={PHOTO_LABELS[type]} className="w-full h-full object-cover" /><button type="button" onClick={() => setPhotos((value) => ({ ...value, [type]: null }))} className="absolute right-1 top-1 rounded-full bg-red-600 p-1 text-white"><X className="w-3 h-3" /></button></div> : <button type="button" onClick={() => fileRefs[type].current?.click()} className="aspect-square w-full rounded-lg border-2 border-dashed flex flex-col items-center justify-center text-xs"><Upload className="w-5 h-5 mb-1" />{PHOTO_LABELS[type]}</button>}
+              </div>
+            ))}</div></div>
+            <div className="space-y-2"><Label>Nivel del tanque despues del suministro</Label><div className="grid grid-cols-3 sm:grid-cols-5 gap-2">{FUEL_LEVELS.map((level, index) => <button type="button" key={level.label} onClick={() => setFuelLevelIndex(index)} className={`rounded-lg border p-2 text-xs ${fuelLevelIndex === index ? `${level.border} bg-muted font-bold` : ""}`}>{level.label}</button>)}</div></div>
+            <Button onClick={openReview} className="w-full bg-emerald-600 hover:bg-emerald-700"><CheckCircle className="w-4 h-4 mr-2" /> Revisar antes de guardar</Button>
+          </CardContent>
+        </Card>
+      )}
+
+      <Dialog open={showReview} onOpenChange={setShowReview}><DialogContent><DialogHeader><DialogTitle>Revision del tanqueo</DialogTitle></DialogHeader><div className="space-y-2 text-sm"><p>Orden: <strong>{selectedOrder?.num}</strong></p><p>Estacion: <strong>{selectedOrder?.station?.nombre || "-"}</strong></p><p>KM: <strong>{Number(mileage).toLocaleString("es-CO")}</strong></p><p>Galones: <strong>{gallons}</strong></p><p>Factura: <strong>{formatCurrency(Number(invoiceValue))}</strong></p><p>Nivel: <strong>{fuelLevelIndex !== null ? FUEL_LEVELS[fuelLevelIndex].label : ""}</strong></p><p className="text-emerald-600"><Camera className="inline w-4 h-4 mr-1" /> Tres evidencias listas y GPS capturado.</p>{calculatedYield !== null && calculatedYield < expectedYield * (1 - (settings?.alert_pct || 20) / 100) && <p className="text-red-600"><AlertTriangle className="inline w-4 h-4 mr-1" /> Se generara alerta por bajo rendimiento.</p>}<div className="flex gap-2 pt-3"><Button variant="outline" onClick={() => setShowReview(false)} className="flex-1">Corregir</Button><Button onClick={confirm} disabled={isSaving} className="flex-1 bg-emerald-600">{isSaving ? "Guardando..." : "Confirmar"}</Button></div></div></DialogContent></Dialog>
+      <Dialog open={Boolean(receipt)} onOpenChange={(open) => !open && setReceipt(null)}><DialogContent><DialogHeader><DialogTitle className="text-emerald-600">Tanqueo registrado</DialogTitle></DialogHeader>{receipt && <div className="space-y-3 text-sm"><p>La orden <strong>{receipt.order.num}</strong> quedo ejecutada correctamente.</p><p>{receipt.record.galones} gal | {formatCurrency(receipt.record.valor_total)} | alcance {receipt.record.alcance_estimado} km</p><div className="flex gap-2"><Button onClick={() => printFuelOrder(receipt.order, settings, receipt.photos)} className="flex-1"><Printer className="w-4 h-4 mr-1" /> Imprimir</Button><Button variant="outline" onClick={() => setReceipt(null)} className="flex-1">Cerrar</Button></div></div>}</DialogContent></Dialog>
+    </div>
+  )
+}
+
+function Field({ label, children }: { label: string; children: React.ReactNode }) {
+  return <div className="space-y-1"><Label>{label}</Label>{children}</div>
+}

@@ -226,7 +226,7 @@ export function AdminView() {
           <SummaryTables byVehicle={byVehicle} byOperator={byOperator} byBrand={byBrand} orders={orders} />
         </TabsContent>
         <TabsContent value="ordenes"><DespachadorView embedded /></TabsContent>
-        <TabsContent value="registros"><RecordsView allowDelete /></TabsContent>
+        <TabsContent value="registros"><RecordsView allowDelete embedded /></TabsContent>
         <TabsContent value="flota">
           <Section title="Flota de motos" button={<Button onClick={() => { setVehicleDraft(EMPTY_VEHICLE); setShowVehicle(true) }}><Plus className="w-4 h-4 mr-1" /> Nueva moto</Button>}>
             <div className="grid md:grid-cols-2 xl:grid-cols-3 gap-3">{vehicles.length ? vehicles.map((vehicle) => <Card key={vehicle.id}><CardHeader><CardTitle>{vehicle.placa}</CardTitle></CardHeader><CardContent className="space-y-1 text-sm"><p>{vehicle.marca} {vehicle.modelo}</p><p>Capacidad: {vehicle.capacidad_tanque} gal</p><p>Rendimiento: {vehicle.rendimiento_esperado} km/gal</p><p>Operario: {vehicle.profiles?.full_name || "Sin asignar"}</p><div className="flex gap-2 pt-2"><Button variant="outline" size="sm" onClick={() => { setVehicleDraft(vehicle); setShowVehicle(true) }}><Edit className="w-4 h-4" /></Button><Button variant="destructive" size="sm" onClick={() => deleteVehicle(vehicle)}><Trash2 className="w-4 h-4" /></Button></div></CardContent></Card>) : <p className="text-muted-foreground">No hay motos registradas.</p>}</div>

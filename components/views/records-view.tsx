@@ -18,7 +18,7 @@ import { Dialog, DialogContent, DialogHeader, DialogTitle } from "@/components/u
 import { Input } from "@/components/ui/input"
 import { SchemaUpdateAlert } from "@/components/ui/schema-update-alert"
 
-export function RecordsView({ operatorId, allowDelete = false }: { operatorId?: string; allowDelete?: boolean }) {
+export function RecordsView({ operatorId, allowDelete = false, embedded = false }: { operatorId?: string; allowDelete?: boolean; embedded?: boolean }) {
   const [records, setRecords] = useState<FuelRecord[]>([])
   const [settings, setSettings] = useState<CompanySettings | null>(null)
   const [selected, setSelected] = useState<FuelRecord | null>(null)
@@ -142,7 +142,7 @@ export function RecordsView({ operatorId, allowDelete = false }: { operatorId?: 
 
   return (
     <div className="space-y-3">
-      {!stationSchemaReady && <SchemaUpdateAlert />}
+      {!embedded && !stationSchemaReady && <SchemaUpdateAlert />}
       <Card>
       <CardHeader className="gap-3 md:flex-row md:items-center md:justify-between">
         <CardTitle>Registros de tanqueo</CardTitle>

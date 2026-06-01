@@ -10,21 +10,17 @@ export async function GET() {
   }
 
   const supabase = createClient(url, anonKey, { auth: { persistSession: false } })
-  const [stations, orders, records, legacyStationPrice, legacyAuthorizedGallons] = await Promise.all([
+  const [stations, orders, records] = await Promise.all([
     supabase.from("service_stations").select("id").limit(1),
     supabase.from("fuel_orders").select("station_id").limit(1),
     supabase.from("fuel_records").select("station_id").limit(1),
-    supabase.from("service_stations").select("precio_galon").limit(1),
-    supabase.from("fuel_orders").select("galones_autorizados").limit(1),
   ])
 
   return NextResponse.json(
     {
       stationSchemaReady: !stations.error
         && !orders.error
-        && !records.error
-        && Boolean(legacyStationPrice.error)
-        && Boolean(legacyAuthorizedGallons.error),
+        && !records.error,
     },
     { headers: { "Cache-Control": "no-store" } },
   )

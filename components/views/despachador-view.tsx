@@ -144,7 +144,7 @@ export function DespachadorView({ embedded = false }: { embedded?: boolean }) {
   return (
     <div className="space-y-5">
       {!embedded && <div><h2 className="text-2xl font-black">Panel de despacho</h2><p className="text-sm text-muted-foreground">Flota y ordenes de suministro</p></div>}
-      {!stationSchemaReady && <SchemaUpdateAlert />}
+      {!embedded && !stationSchemaReady && <SchemaUpdateAlert />}
       <Tabs defaultValue="ordenes">
         <TabsList><TabsTrigger value="ordenes">Ordenes</TabsTrigger><TabsTrigger value="flota">Flota</TabsTrigger></TabsList>
         <TabsContent value="ordenes" className="space-y-4">

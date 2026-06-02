@@ -6,6 +6,7 @@ import { toast } from "sonner"
 import { useAuth } from "@/lib/auth-context"
 import { executeFuelOrder, expireFuelOrders, loadFuelRecords } from "@/lib/fuel-service"
 import { FUEL_LEVELS, formatCurrency, formatDate, formatNumber, todayIso } from "@/lib/fuel-utils"
+import { notifyOrderStatus } from "@/lib/notifications"
 import { downloadFuelOrderPdf, printFuelOrder } from "@/lib/order-print"
 import { hasStationSchema } from "@/lib/schema-capabilities"
 import { removeEvidence, uploadEvidence } from "@/lib/storage"
@@ -232,6 +233,9 @@ export function OperarioView() {
       setSelectedOrder(null)
       await loadData()
       toast.success("Tanqueo registrado y orden ejecutada.", { id: toastId })
+      notifyOrderStatus(selectedOrder.id)
+        .then((result) => toast.success(result.message))
+        .catch((notificationError) => toast.warning(notificationError.message || "La orden se ejecuto, pero no se pudo notificar al administrador."))
     } catch (requestError: any) {
       await removeEvidence(uploaded.map((item) => item.path))
       console.error(requestError)

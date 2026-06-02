@@ -46,7 +46,7 @@ supabase/migrations/202606020001_order_edits_tank_photo.sql
 
 Este script es adicional. No reemplaza ni modifica `202606010001_full_fuel_control.sql`.
 
-## Aviso automatico al cerrar una orden
+## Aviso automatico al cerrar o ejecutar una orden
 
 La aplicacion intenta avisar al administrador en este orden: WhatsApp, correo y SMS. Las credenciales son privadas del servidor. Agrega solo los canales que vayas a usar:
 
@@ -67,6 +67,16 @@ RESEND_FROM=ASUCAP <notificaciones@empresa.com>
 ```
 
 `ADMIN_NOTIFICATION_PHONE` debe usar formato internacional. Si omites `ADMIN_NOTIFICATION_PHONE` o `ADMIN_NOTIFICATION_EMAIL`, se usan el telefono y el correo guardados en `Configuracion > Empresa`.
+
+En el Sandbox de WhatsApp deja `TWILIO_WHATSAPP_CONTENT_SID` vacio: la aplicacion enviara un `Body` libre. Configura esa variable solamente cuando tengas una plantilla de contenido aprobada. Reinicia `npm run dev` despues de modificar `.env.local`.
+
+Para verificar el Sandbox sin cerrar una orden, inicia sesion como administrador o despachador y ejecuta una solicitud autenticada:
+
+```powershell
+curl.exe -X POST http://localhost:3000/api/notifications/test -H "Authorization: Bearer TOKEN_DE_SESION"
+```
+
+El endpoint temporal `POST /api/notifications/test` envia el texto de prueba al numero configurado en `ADMIN_NOTIFICATION_PHONE`. Si Twilio acepta el mensaje, devuelve su `sid`. El servidor registra el intento y cualquier error de Twilio sin imprimir secretos.
 
 Para produccion, configura un remitente aprobado y una plantilla aprobada de WhatsApp en Twilio mediante `TWILIO_WHATSAPP_CONTENT_SID`. Consulta la [API de mensajes de Twilio](https://www.twilio.com/docs/messaging/api/message-resource) y la [API de correos de Resend](https://resend.com/docs/api-reference/emails).
 

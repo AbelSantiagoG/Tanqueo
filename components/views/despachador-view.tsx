@@ -6,7 +6,7 @@ import { toast } from "sonner"
 import { useAuth } from "@/lib/auth-context"
 import { createFuelOrder, expireFuelOrders, updateFuelOrder } from "@/lib/fuel-service"
 import { formatCurrency, formatDate, formatNumber, formatOrderStatus, formatPhotoType, todayIso } from "@/lib/fuel-utils"
-import { notifyClosedOrder } from "@/lib/notifications"
+import { notifyOrderStatus } from "@/lib/notifications"
 import { downloadFuelOrderPdf, printFuelOrder } from "@/lib/order-print"
 import { hasStationSchema } from "@/lib/schema-capabilities"
 import { supabase } from "@/lib/supabase"
@@ -151,7 +151,7 @@ export function DespachadorView({ embedded = false }: { embedded?: boolean }) {
     if (error) return toast.error(error.message)
     toast.success(`Orden ${order.num} actualizada.`)
     if (estado === "cerrada") {
-      notifyClosedOrder(order.id)
+      notifyOrderStatus(order.id)
         .then((result) => toast.success(result.message))
         .catch((error) => toast.warning(error.message || "La orden se cerro, pero no se pudo notificar al administrador."))
     }

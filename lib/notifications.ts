@@ -1,6 +1,6 @@
 import { supabase } from "@/lib/supabase"
 
-export async function notifyClosedOrder(orderId: string) {
+export async function notifyOrderStatus(orderId: string) {
   const { data, error } = await supabase.auth.getSession()
   if (error || !data.session?.access_token) throw new Error("Inicia sesion nuevamente para enviar la notificacion.")
 
@@ -13,6 +13,8 @@ export async function notifyClosedOrder(orderId: string) {
     body: JSON.stringify({ orderId }),
   })
   const body = await response.json()
-  if (!response.ok) throw new Error(body.error || "No se pudo notificar el cierre.")
+  if (!response.ok) throw new Error(body.error || "No se pudo notificar la orden.")
   return body as { channel: "whatsapp" | "correo" | "sms" | "sin_configurar"; message: string }
 }
+
+export const notifyClosedOrder = notifyOrderStatus

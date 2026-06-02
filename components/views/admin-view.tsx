@@ -205,10 +205,10 @@ export function AdminView() {
 
   return (
     <div className="space-y-5">
-      <div><h2 className="text-2xl font-black">Administracion general</h2><p className="text-sm text-muted-foreground">Control integral de tanqueo y flota</p></div>
+      <div><h2 className="text-xl font-black sm:text-2xl">Administracion general</h2><p className="text-sm text-muted-foreground">Control integral de tanqueo y flota</p></div>
       {!stationSchemaReady && <SchemaUpdateAlert />}
       <Tabs defaultValue="dashboard">
-        <TabsList className="h-auto flex-wrap justify-start">
+        <TabsList className="w-full">
           <TabsTrigger value="dashboard">Resumen</TabsTrigger><TabsTrigger value="ordenes">Ordenes</TabsTrigger><TabsTrigger value="registros">Registros</TabsTrigger><TabsTrigger value="flota">Flota</TabsTrigger><TabsTrigger value="estaciones">Estaciones</TabsTrigger><TabsTrigger value="personal">Personal</TabsTrigger><TabsTrigger value="config">Configuracion</TabsTrigger>
         </TabsList>
         <TabsContent value="dashboard" className="space-y-4">
@@ -239,53 +239,56 @@ export function AdminView() {
         </TabsContent>
         <TabsContent value="personal">
           <Section title="Operarios y despachadores" button={<Button onClick={() => { setProfileDraft(EMPTY_PROFILE); setShowProfile(true) }}><Plus className="w-4 h-4 mr-1" /> Nuevo usuario</Button>}>
-            <div className="overflow-x-auto"><table className="w-full text-sm"><thead><tr className="text-left"><th className="p-3">Nombre</th><th className="p-3">Rol</th><th className="p-3">Cedula</th><th className="p-3">Telefono</th><th className="p-3">Zona</th><th></th></tr></thead><tbody>{profiles.map((profile) => <tr key={profile.id} className="border-t"><td className="p-3">{profile.full_name}</td><td className="p-3"><Badge>{formatRole(profile.role)}</Badge></td><td className="p-3">{profile.cedula}</td><td className="p-3">{profile.telefono}</td><td className="p-3">{profile.zona}</td><td className="p-3 flex gap-1"><Button variant="ghost" size="icon" onClick={() => { setProfileDraft(profile); setShowProfile(true) }}><Edit className="w-4 h-4" /></Button><Button variant="ghost" size="icon" onClick={() => deleteProfile(profile)}><Trash2 className="w-4 h-4 text-red-500" /></Button></td></tr>)}</tbody></table></div>
+            {!profiles.length ? <p className="text-sm text-muted-foreground">No hay usuarios registrados.</p> : <>
+              <div className="space-y-3 md:hidden">{profiles.map((profile) => <div key={profile.id} className="rounded-lg border p-3 shadow-sm"><div className="flex items-start justify-between gap-2"><div><p className="font-semibold">{profile.full_name}</p><Badge className="mt-1">{formatRole(profile.role)}</Badge></div><div className="flex gap-1"><Button variant="ghost" size="icon" onClick={() => { setProfileDraft(profile); setShowProfile(true) }}><Edit className="w-4 h-4" /></Button><Button variant="ghost" size="icon" onClick={() => deleteProfile(profile)}><Trash2 className="w-4 h-4 text-red-500" /></Button></div></div><div className="mt-3 grid gap-1 border-t pt-2 text-xs text-muted-foreground"><span>Cedula: {profile.cedula || "-"}</span><span>Telefono: {profile.telefono || "-"}</span><span>Zona: {profile.zona || "-"}</span></div></div>)}</div>
+              <div className="hidden overflow-x-auto md:block"><table className="w-full text-sm"><thead><tr className="text-left"><th className="p-3">Nombre</th><th className="p-3">Rol</th><th className="p-3">Cedula</th><th className="p-3">Telefono</th><th className="p-3">Zona</th><th></th></tr></thead><tbody>{profiles.map((profile) => <tr key={profile.id} className="border-t"><td className="p-3">{profile.full_name}</td><td className="p-3"><Badge>{formatRole(profile.role)}</Badge></td><td className="p-3">{profile.cedula}</td><td className="p-3">{profile.telefono}</td><td className="p-3">{profile.zona}</td><td className="p-3 flex gap-1"><Button variant="ghost" size="icon" onClick={() => { setProfileDraft(profile); setShowProfile(true) }}><Edit className="w-4 h-4" /></Button><Button variant="ghost" size="icon" onClick={() => deleteProfile(profile)}><Trash2 className="w-4 h-4 text-red-500" /></Button></td></tr>)}</tbody></table></div>
+            </>}
           </Section>
         </TabsContent>
         <TabsContent value="config">
           <form onSubmit={saveSettings} className="space-y-4">
             <SettingsCard title="Empresa"><SettingsFields settings={settings} setSettings={setSettings} /></SettingsCard>
             <SettingsCard title="Sistema"><div className="grid sm:grid-cols-4 gap-3"><Field label="Prefijo"><Input value={settings.prefix} onChange={(event) => setSettings({ ...settings, prefix: event.target.value.toUpperCase() })} /></Field><Field label="Dias vencimiento"><Input type="number" value={settings.dias_venc} onChange={(event) => setSettings({ ...settings, dias_venc: Number(event.target.value) })} /></Field><Field label="% alerta rendimiento"><Input type="number" value={settings.alert_pct} onChange={(event) => setSettings({ ...settings, alert_pct: Number(event.target.value) })} /></Field><Field label="Nuevo PIN admin"><Input type="password" value={newPin} onChange={(event) => setNewPin(event.target.value)} placeholder="Dejar vacio para conservar" /></Field></div></SettingsCard>
-            <Button className="bg-emerald-600 hover:bg-emerald-700">Guardar configuracion</Button>
+            <Button className="w-full bg-emerald-600 hover:bg-emerald-700 sm:w-auto">Guardar configuracion</Button>
           </form>
         </TabsContent>
       </Tabs>
 
-      <Dialog open={showVehicle} onOpenChange={setShowVehicle}><DialogContent><DialogHeader><DialogTitle>Moto de la flota</DialogTitle><DialogDescription>Registra o actualiza los datos de la moto.</DialogDescription></DialogHeader><form onSubmit={saveVehicle} className="grid grid-cols-2 gap-3">
+      <Dialog open={showVehicle} onOpenChange={setShowVehicle}><DialogContent><DialogHeader><DialogTitle>Moto de la flota</DialogTitle><DialogDescription>Registra o actualiza los datos de la moto.</DialogDescription></DialogHeader><form onSubmit={saveVehicle} className="grid gap-3 sm:grid-cols-2">
         <Field label="Placa"><Input value={vehicleDraft.placa || ""} onChange={(event) => setVehicleDraft({ ...vehicleDraft, placa: event.target.value })} /></Field>
         <Field label="Marca"><Select value={vehicleDraft.marca} onValueChange={(marca) => setVehicleDraft({ ...vehicleDraft, marca, rendimiento_esperado: BRAND_YIELDS[marca] })}><SelectTrigger><SelectValue /></SelectTrigger><SelectContent>{VEHICLE_BRANDS.map((brand) => <SelectItem key={brand} value={brand}>{brand}</SelectItem>)}</SelectContent></Select></Field>
         <Field label="Modelo"><Input value={vehicleDraft.modelo || ""} onChange={(event) => setVehicleDraft({ ...vehicleDraft, modelo: event.target.value })} /></Field><Field label="Ano"><Input value={vehicleDraft.anio || ""} onChange={(event) => setVehicleDraft({ ...vehicleDraft, anio: event.target.value })} /></Field>
         <Field label="Capacidad gal"><Input type="number" step="0.1" value={vehicleDraft.capacidad_tanque || ""} onChange={(event) => setVehicleDraft({ ...vehicleDraft, capacidad_tanque: Number(event.target.value) })} /></Field><Field label="Rendimiento km/gal"><Input type="number" value={vehicleDraft.rendimiento_esperado || ""} onChange={(event) => setVehicleDraft({ ...vehicleDraft, rendimiento_esperado: Number(event.target.value) })} /></Field>
         <Field label="KM inicial"><Input type="number" value={vehicleDraft.kilometraje_inicial || ""} onChange={(event) => setVehicleDraft({ ...vehicleDraft, kilometraje_inicial: Number(event.target.value) })} /></Field><Field label="Color / descripcion"><Input value={vehicleDraft.color || ""} onChange={(event) => setVehicleDraft({ ...vehicleDraft, color: event.target.value })} /></Field>
         <Field label="Estado"><Select value={vehicleDraft.activo === false ? "inactive" : "active"} onValueChange={(value) => setVehicleDraft({ ...vehicleDraft, activo: value === "active" })}><SelectTrigger><SelectValue /></SelectTrigger><SelectContent><SelectItem value="active">Activa</SelectItem><SelectItem value="inactive">Inactiva</SelectItem></SelectContent></Select></Field>
-        <div className="col-span-2"><Field label="Operario asignado"><Select value={vehicleDraft.operario_asignado_id || "none"} onValueChange={(value) => setVehicleDraft({ ...vehicleDraft, operario_asignado_id: value === "none" ? null : value })}><SelectTrigger><SelectValue /></SelectTrigger><SelectContent><SelectItem value="none">Sin asignar</SelectItem>{profiles.filter((profile) => profile.role === "operario").map((profile) => <SelectItem value={profile.id} key={profile.id}>{profile.full_name}</SelectItem>)}</SelectContent></Select></Field></div><Button className="col-span-2">Guardar moto</Button>
+        <div className="sm:col-span-2"><Field label="Operario asignado"><Select value={vehicleDraft.operario_asignado_id || "none"} onValueChange={(value) => setVehicleDraft({ ...vehicleDraft, operario_asignado_id: value === "none" ? null : value })}><SelectTrigger><SelectValue /></SelectTrigger><SelectContent><SelectItem value="none">Sin asignar</SelectItem>{profiles.filter((profile) => profile.role === "operario").map((profile) => <SelectItem value={profile.id} key={profile.id}>{profile.full_name}</SelectItem>)}</SelectContent></Select></Field></div><Button className="sm:col-span-2">Guardar moto</Button>
       </form></DialogContent></Dialog>
 
-      <Dialog open={showStation} onOpenChange={setShowStation}><DialogContent><DialogHeader><DialogTitle>Estacion de servicio</DialogTitle><DialogDescription>Registra o actualiza los datos de la estacion.</DialogDescription></DialogHeader><form onSubmit={saveStation} className="grid grid-cols-2 gap-3">
+      <Dialog open={showStation} onOpenChange={setShowStation}><DialogContent><DialogHeader><DialogTitle>Estacion de servicio</DialogTitle><DialogDescription>Registra o actualiza los datos de la estacion.</DialogDescription></DialogHeader><form onSubmit={saveStation} className="grid gap-3 sm:grid-cols-2">
         <Field label="Nombre"><Input value={stationDraft.nombre || ""} onChange={(event) => setStationDraft({ ...stationDraft, nombre: event.target.value })} /></Field><Field label="NIT"><Input value={stationDraft.nit || ""} onChange={(event) => setStationDraft({ ...stationDraft, nit: event.target.value })} /></Field>
         <Field label="Direccion"><Input value={stationDraft.direccion || ""} onChange={(event) => setStationDraft({ ...stationDraft, direccion: event.target.value })} /></Field><Field label="Telefono"><Input value={stationDraft.telefono || ""} onChange={(event) => setStationDraft({ ...stationDraft, telefono: event.target.value })} /></Field>
         <Field label="Combustible"><Input value={stationDraft.combustible || ""} onChange={(event) => setStationDraft({ ...stationDraft, combustible: event.target.value })} /></Field>
         <Field label="Enlace del logo"><Input value={stationDraft.logo_url || ""} onChange={(event) => setStationDraft({ ...stationDraft, logo_url: event.target.value })} /></Field><Field label="Estado"><Select value={stationDraft.activo === false ? "inactive" : "active"} onValueChange={(value) => setStationDraft({ ...stationDraft, activo: value === "active" })}><SelectTrigger><SelectValue /></SelectTrigger><SelectContent><SelectItem value="active">Activa</SelectItem><SelectItem value="inactive">Inactiva</SelectItem></SelectContent></Select></Field>
-        <Button className="col-span-2">Guardar estacion</Button>
+        <Button className="sm:col-span-2">Guardar estacion</Button>
       </form></DialogContent></Dialog>
 
-      <Dialog open={showProfile} onOpenChange={setShowProfile}><DialogContent><DialogHeader><DialogTitle>Personal</DialogTitle><DialogDescription>Registra o actualiza la informacion del usuario.</DialogDescription></DialogHeader><form onSubmit={saveProfile} className="grid grid-cols-2 gap-3">
+      <Dialog open={showProfile} onOpenChange={setShowProfile}><DialogContent><DialogHeader><DialogTitle>Personal</DialogTitle><DialogDescription>Registra o actualiza la informacion del usuario.</DialogDescription></DialogHeader><form onSubmit={saveProfile} className="grid gap-3 sm:grid-cols-2">
         <Field label="Nombre"><Input value={profileDraft.full_name || ""} onChange={(event) => setProfileDraft({ ...profileDraft, full_name: event.target.value })} /></Field><Field label="Rol"><Select value={profileDraft.role} onValueChange={(role: UserRole) => setProfileDraft({ ...profileDraft, role })}><SelectTrigger><SelectValue /></SelectTrigger><SelectContent><SelectItem value="operario">Operario</SelectItem><SelectItem value="despachador">Despachador</SelectItem><SelectItem value="admin">Administrador</SelectItem></SelectContent></Select></Field>
         <Field label="Cedula"><Input value={profileDraft.cedula || ""} onChange={(event) => setProfileDraft({ ...profileDraft, cedula: event.target.value })} /></Field><Field label="Telefono"><Input value={profileDraft.telefono || ""} onChange={(event) => setProfileDraft({ ...profileDraft, telefono: event.target.value })} /></Field>
         <Field label="Correo"><Input type="email" value={profileDraft.email || ""} onChange={(event) => setProfileDraft({ ...profileDraft, email: event.target.value })} /></Field><Field label="Cargo"><Input value={profileDraft.cargo || ""} onChange={(event) => setProfileDraft({ ...profileDraft, cargo: event.target.value })} /></Field>
         <Field label="Zona / ruta"><Input value={profileDraft.zona || ""} onChange={(event) => setProfileDraft({ ...profileDraft, zona: event.target.value })} /></Field><Field label="Estado"><Select value={profileDraft.activo === false ? "inactive" : "active"} onValueChange={(value) => setProfileDraft({ ...profileDraft, activo: value === "active" })}><SelectTrigger><SelectValue /></SelectTrigger><SelectContent><SelectItem value="active">Activo</SelectItem><SelectItem value="inactive">Inactivo</SelectItem></SelectContent></Select></Field>{!profileDraft.id && <Field label="Contrasena temporal"><Input type="password" value={profileDraft.password || ""} onChange={(event) => setProfileDraft({ ...profileDraft, password: event.target.value })} /></Field>}
-        <div className="col-span-2"><Field label="Observaciones"><Textarea value={profileDraft.observaciones || ""} onChange={(event) => setProfileDraft({ ...profileDraft, observaciones: event.target.value })} /></Field></div><Button className="col-span-2">Guardar personal</Button>
+        <div className="sm:col-span-2"><Field label="Observaciones"><Textarea value={profileDraft.observaciones || ""} onChange={(event) => setProfileDraft({ ...profileDraft, observaciones: event.target.value })} /></Field></div><Button className="sm:col-span-2">Guardar personal</Button>
       </form></DialogContent></Dialog>
     </div>
   )
 }
 
 function Metric({ label, value, icon }: { label: string; value: string | number; icon: React.ReactNode }) {
-  return <Card><CardContent className="p-3"><div className="w-5 h-5 text-blue-500">{icon}</div><p className="mt-2 text-xl font-black">{value}</p><p className="text-[10px] uppercase text-muted-foreground">{label}</p></CardContent></Card>
+  return <Card><CardContent className="p-3"><div className="w-5 h-5 text-blue-500">{icon}</div><p className="mt-2 break-words text-lg font-black sm:text-xl">{value}</p><p className="text-[10px] uppercase text-muted-foreground">{label}</p></CardContent></Card>
 }
 
 function Chart({ title, children, wide = false }: { title: string; children: React.ReactElement; wide?: boolean }) {
-  return <Card className={wide ? "lg:col-span-2" : ""}><CardHeader><CardTitle className="text-sm">{title}</CardTitle></CardHeader><CardContent className="h-64"><ResponsiveContainer width="100%" height="100%">{children}</ResponsiveContainer></CardContent></Card>
+  return <Card className={wide ? "lg:col-span-2" : ""}><CardHeader><CardTitle className="text-sm">{title}</CardTitle></CardHeader><CardContent className="h-56 px-1 sm:h-64 sm:px-6"><ResponsiveContainer width="100%" height="100%">{children}</ResponsiveContainer></CardContent></Card>
 }
 
 function SummaryTables({ byVehicle, byOperator, byBrand, orders }: { byVehicle: any[]; byOperator: any[]; byBrand: any[]; orders: FuelOrder[] }) {
@@ -298,7 +301,7 @@ function SmallTable({ title, rows }: { title: string; rows: Array<Array<string |
 }
 
 function Section({ title, button, children }: { title: string; button: React.ReactNode; children: React.ReactNode }) {
-  return <Card><CardHeader className="flex-row items-center justify-between"><CardTitle>{title}</CardTitle>{button}</CardHeader><CardContent>{children}</CardContent></Card>
+  return <Card><CardHeader className="gap-3 sm:flex-row sm:items-center sm:justify-between"><CardTitle>{title}</CardTitle><div className="[&>button]:w-full sm:[&>button]:w-auto">{button}</div></CardHeader><CardContent>{children}</CardContent></Card>
 }
 
 function SettingsCard({ title, children }: { title: string; children: React.ReactNode }) {

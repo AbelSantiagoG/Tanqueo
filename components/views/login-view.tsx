@@ -74,10 +74,10 @@ export function LoginView() {
 
   return (
     <main className="min-h-screen flex items-center justify-center bg-gradient-to-br from-slate-950 via-blue-950 to-blue-700 p-4">
-      <Card className="w-full max-w-md bg-white text-slate-900 border-0 shadow-2xl">
-        <CardHeader className="text-center">
+      <Card className="min-w-0 w-full max-w-md overflow-hidden bg-white text-slate-900 border-0 shadow-2xl">
+        <CardHeader className="min-w-0 text-center">
           <CompanyLogo className="mx-auto h-24 w-full rounded-lg bg-white px-2" />
-          <CardTitle className="text-xl font-black uppercase mt-3">Control de Tanqueo</CardTitle>
+          <CardTitle className="mt-3 text-lg font-black uppercase sm:text-xl">Control de Tanqueo</CardTitle>
           <p className="text-xs text-slate-500">Selecciona tu perfil para ingresar</p>
         </CardHeader>
         <CardContent>

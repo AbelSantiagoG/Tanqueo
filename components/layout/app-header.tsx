@@ -68,9 +68,9 @@ export function AppHeader({ onMenuToggle }: AppHeaderProps) {
 
   return (
     <header className="sticky top-0 z-40 bg-card/95 backdrop-blur-md border-b border-border/50 shadow-sm">
-      <div className="flex items-center justify-between px-4 py-3">
+      <div className="flex items-center justify-between gap-2 px-3 py-3 sm:px-4">
         {/* Left side */}
-        <div className="flex items-center gap-3">
+        <div className="flex min-w-0 items-center gap-2 sm:gap-3">
           <Button
             variant="ghost"
             size="icon"
@@ -88,7 +88,7 @@ export function AppHeader({ onMenuToggle }: AppHeaderProps) {
           </div>
           {/* Mobile logo */}
           <div className="lg:hidden flex items-center gap-2">
-            <CompanyLogo className="h-9 w-24 rounded bg-white px-1" />
+            <CompanyLogo className="h-9 w-20 rounded bg-white px-1 sm:w-24" />
           </div>
         </div>
 
@@ -114,7 +114,7 @@ export function AppHeader({ onMenuToggle }: AppHeaderProps) {
             <DropdownMenuTrigger asChild>
               <Button
                 variant="outline"
-                className="flex items-center gap-2 border-border bg-card hover:bg-muted/50"
+                className="flex items-center gap-1 border-border bg-card px-2 hover:bg-muted/50 sm:gap-2 sm:px-4"
               >
                 <div className={`w-6 h-6 rounded-md ${config?.bgColor} flex items-center justify-center`}>
                   <Icon className={`w-4 h-4 ${config?.color}`} />

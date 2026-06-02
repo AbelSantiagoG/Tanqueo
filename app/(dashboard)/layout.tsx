@@ -5,7 +5,7 @@ import { useAuth } from "@/lib/auth-context";
 import { useRouter } from "next/navigation";
 import { usePathname } from "next/navigation";
 import { AppHeader } from "@/components/layout/app-header";
-import { AppSidebar } from "@/components/layout/app-sidebar";
+import { AppSidebar, MobileSidebar } from "@/components/layout/app-sidebar";
 import { MobileNav } from "@/components/layout/mobile-nav";
 
 export default function DashboardLayout({
@@ -16,7 +16,8 @@ export default function DashboardLayout({
   const { isAuthenticated, isLoading, role } = useAuth();
   const router = useRouter();
   const pathname = usePathname();
-  const [sidebarOpen, setSidebarOpen] = useState(false);
+  const [sidebarExpanded, setSidebarExpanded] = useState(false);
+  const [mobileSidebarOpen, setMobileSidebarOpen] = useState(false);
 
   useEffect(() => {
     if (!isLoading) {
@@ -51,18 +52,20 @@ export default function DashboardLayout({
       {/* Desktop Sidebar */}
       <div className="hidden lg:block">
         <AppSidebar
-          isOpen={sidebarOpen}
-          onToggle={() => setSidebarOpen(!sidebarOpen)}
+          isOpen={sidebarExpanded}
+          onToggle={() => setSidebarExpanded(!sidebarExpanded)}
         />
       </div>
 
+      <MobileSidebar isOpen={mobileSidebarOpen} onOpenChange={setMobileSidebarOpen} />
+
       {/* Main Content */}
-      <div className={`transition-all duration-300 ${sidebarOpen ? "lg:ml-64" : "lg:ml-20"}`}>
+      <div className={`transition-all duration-300 ${sidebarExpanded ? "lg:ml-64" : "lg:ml-20"}`}>
         <AppHeader
-          onMenuToggle={() => setSidebarOpen(!sidebarOpen)}
+          onMenuToggle={() => setMobileSidebarOpen(true)}
         />
 
-        <main className="p-4 lg:p-6 pb-24 lg:pb-6">
+        <main className="min-w-0 px-3 py-4 pb-24 sm:px-4 lg:p-6">
           {children}
         </main>
       </div>

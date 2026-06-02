@@ -109,14 +109,42 @@ function buildFuelOrderDocument(order: FuelOrder, settings?: CompanySettings | n
 
 export function printFuelOrder(order: FuelOrder, settings?: CompanySettings | null, _photos: OrderPhoto[] = []) {
   void _photos
-  const popup = window.open("", "_blank")
-  if (!popup) throw new Error("El navegador bloqueo la ventana de impresion.")
-  popup.document.write(`<!doctype html><html lang="es"><head><meta charset="utf-8"><title>${escapeHtml(order.num)}</title><style>@page{size:letter portrait;margin:0}*{box-sizing:border-box;-webkit-print-color-adjust:exact;print-color-adjust:exact}html,body{width:8.5in;height:11in;margin:0;background:#fff}#fuel-order-document{break-after:avoid;page-break-after:avoid}</style></head><body>${buildFuelOrderDocument(order, settings)}</body></html>`)
-  popup.document.close()
-  popup.addEventListener("afterprint", () => popup.close(), { once: true })
-  void waitForImages(popup.document).then(() => {
-    popup.focus()
-    popup.print()
+  const rootId = `fuel-order-print-root-${Date.now()}`
+  const originalTitle = document.title
+  const container = document.createElement("div")
+  const printStyle = document.createElement("style")
+
+  document.title = safeFileName(order.num)
+  container.id = rootId
+  container.setAttribute("aria-hidden", "true")
+  container.style.cssText = "position:fixed;left:-10000px;top:0;width:8.5in;height:5.5in;overflow:hidden;background:#fff;z-index:-1"
+  container.innerHTML = buildFuelOrderDocument(order, settings)
+  printStyle.textContent = `
+    @page{size:letter portrait;margin:0}
+    @media print{
+      *{box-sizing:border-box;-webkit-print-color-adjust:exact;print-color-adjust:exact}
+      html,body{width:8.5in!important;height:11in!important;margin:0!important;background:#fff!important}
+      body>*:not(#${rootId}){display:none!important}
+      #${rootId}{display:block!important;position:static!important;width:8.5in!important;height:5.5in!important;margin:0!important;overflow:hidden!important;background:#fff!important}
+      #${rootId} #fuel-order-document{break-after:avoid;page-break-after:avoid}
+    }
+  `
+
+  const cleanup = () => {
+    document.title = originalTitle
+    printStyle.remove()
+    container.remove()
+  }
+
+  document.head.appendChild(printStyle)
+  document.body.appendChild(container)
+  window.addEventListener("afterprint", cleanup, { once: true })
+  void waitForImages(container).then(() => {
+    window.focus()
+    window.print()
+    window.setTimeout(() => {
+      if (document.body.contains(container)) cleanup()
+    }, 30000)
   })
 }
 

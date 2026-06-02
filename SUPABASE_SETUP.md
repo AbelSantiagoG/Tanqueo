@@ -8,7 +8,7 @@
 
 La migracion conserva los datos existentes, agrega `service_stations` y `fuel_records`, aplica RLS y define las RPC requeridas. Tambien corrige instalaciones antiguas donde `fuel_orders.galones` quedo obligatorio: una orden pendiente todavia no tiene galones reales.
 
-El despachador crea la orden sin definir galones. El operario registra manualmente los galones suministrados, el valor total de la factura, la foto del tablero y la foto de la factura al ejecutar la orden.
+El despachador crea la orden sin definir galones. El operario registra manualmente los galones suministrados, el valor total de la factura, la foto del tablero, la foto del nivel del tanque y la foto de la factura al ejecutar la orden.
 
 Puedes ejecutar nuevamente la migracion completa si ya habias aplicado una version anterior. Las operaciones son idempotentes y migran la estacion configurada anteriormente a la nueva lista de estaciones.
 
@@ -36,6 +36,40 @@ CLOUDINARY_FOLDER=tanqueo/evidencias
 
 `CLOUDINARY_FOLDER` es opcional. Si ya tienes una carpeta creada, escribe su ruta en esa variable. No uses el prefijo `NEXT_PUBLIC_`: la firma de subida se genera exclusivamente en el servidor.
 
+## Actualizacion incremental del 2 de junio de 2026
+
+Para agregar la edicion de ordenes pendientes o vencidas y la tercera evidencia fotografica, ejecuta solamente:
+
+```text
+supabase/migrations/202606020001_order_edits_tank_photo.sql
+```
+
+Este script es adicional. No reemplaza ni modifica `202606010001_full_fuel_control.sql`.
+
+## Aviso automatico al cerrar una orden
+
+La aplicacion intenta avisar al administrador en este orden: WhatsApp, correo y SMS. Las credenciales son privadas del servidor. Agrega solo los canales que vayas a usar:
+
+```dotenv
+ADMIN_NOTIFICATION_PHONE=+573001234567
+ADMIN_NOTIFICATION_EMAIL=admin@empresa.com
+
+TWILIO_ACCOUNT_SID=
+TWILIO_AUTH_TOKEN=
+TWILIO_API_KEY=
+TWILIO_API_KEY_SECRET=
+TWILIO_WHATSAPP_FROM=whatsapp:+14155238886
+TWILIO_WHATSAPP_CONTENT_SID=
+TWILIO_SMS_FROM=
+
+RESEND_API_KEY=
+RESEND_FROM=ASUCAP <notificaciones@empresa.com>
+```
+
+`ADMIN_NOTIFICATION_PHONE` debe usar formato internacional. Si omites `ADMIN_NOTIFICATION_PHONE` o `ADMIN_NOTIFICATION_EMAIL`, se usan el telefono y el correo guardados en `Configuracion > Empresa`.
+
+Para produccion, configura un remitente aprobado y una plantilla aprobada de WhatsApp en Twilio mediante `TWILIO_WHATSAPP_CONTENT_SID`. Consulta la [API de mensajes de Twilio](https://www.twilio.com/docs/messaging/api/message-resource) y la [API de correos de Resend](https://resend.com/docs/api-reference/emails).
+
 ## Primer administrador
 
 Si todavia no existe una cuenta administradora:
@@ -55,5 +89,5 @@ set full_name = excluded.full_name, role = excluded.role, email = excluded.email
 
 - Confirma que `.env.local` contiene las credenciales privadas de Cloudinary.
 - Confirma que existe la tabla `service_stations`.
-- Confirma que existen las RPC `create_fuel_order`, `expire_fuel_orders`, `execute_fuel_order`, `delete_fuel_record` y `set_admin_pin`.
+- Confirma que existen las RPC `create_fuel_order`, `update_fuel_order`, `expire_fuel_orders`, `execute_fuel_order`, `delete_fuel_record` y `set_admin_pin`.
 - Inicia sesion como administrador y crea una estacion, un operario, un despachador y una moto.

@@ -5,7 +5,7 @@ import { saveAs } from "file-saver"
 import { Download, Eye, MapPin, Printer, Search, Trash2 } from "lucide-react"
 import { toast } from "sonner"
 import { loadFuelRecords } from "@/lib/fuel-service"
-import { formatCurrency, formatDate } from "@/lib/fuel-utils"
+import { formatCurrency, formatDate, formatNumber, formatPhotoType } from "@/lib/fuel-utils"
 import { downloadFuelOrderPdf, printFuelOrder } from "@/lib/order-print"
 import { removeEvidence } from "@/lib/storage"
 import { supabase } from "@/lib/supabase"
@@ -102,15 +102,16 @@ export function RecordsView({ operatorId, allowDelete = false, embedded = false 
       workbook.creator = "ASUCAP Control de Tanqueo"
       const sheet = workbook.addWorksheet("Tanqueos")
       const columns: Array<[string, string, number]> = [
-        ["ID", "id", 38], ["Numero orden", "order", 18], ["Fecha", "date", 13], ["Operario", "operator", 24],
+        ["Numero orden", "order", 18], ["Fecha", "date", 13], ["Operario", "operator", 24],
         ["Cedula", "cedula", 16], ["Moto placa", "plate", 14], ["Marca", "brand", 14], ["Modelo", "model", 16], ["Estacion", "station", 24],
         ["Kilometros", "mileage", 14], ["Galones", "gallons", 12], ["Valor COP", "value", 16], ["Nivel tanque", "level", 18],
         ["Rendimiento real", "realYield", 18], ["Rendimiento esperado", "expectedYield", 22], ["Alcance estimado", "range", 18],
         ["Alerta rendimiento", "alert", 18], ["Despachador", "dispatcher", 22], ["Observaciones", "notes", 30],
         ["Latitud", "lat", 15], ["Longitud", "lng", 15], ["Precision GPS", "accuracy", 15], ["Mapa", "maps", 42],
-        ["Foto tablero", "dashboard", 48], ["Foto factura", "invoice", 48], ["Timestamp", "timestamp", 22],
+        ["Foto tablero", "dashboard", 48], ["Foto nivel del tanque", "tankLevelPhoto", 48], ["Foto factura", "invoice", 48], ["Fecha y hora", "timestamp", 22],
       ]
       sheet.columns = columns.map(([header, key, width]) => ({ header, key, width }))
+      for (const key of ["mileage", "gallons", "value", "realYield", "expectedYield", "range"]) sheet.getColumn(key).numFmt = "#,##0.##"
       sheet.getRow(1).eachCell((cell) => {
         cell.font = { bold: true, color: { argb: "FFFFFFFF" } }
         cell.fill = { type: "pattern", pattern: "solid", fgColor: { argb: "FF1A56DB" } }
@@ -118,14 +119,14 @@ export function RecordsView({ operatorId, allowDelete = false, embedded = false 
       filtered.forEach((record) => {
         const photos = photosByOrder.get(record.order_id) || {}
         sheet.addRow({
-          id: record.id, order: record.fuel_orders?.num, date: record.fecha, operator: record.profiles?.full_name,
+          order: record.fuel_orders?.num, date: record.fecha, operator: record.profiles?.full_name,
           cedula: record.profiles?.cedula, plate: record.vehicles?.placa, brand: record.vehicles?.marca, model: record.vehicles?.modelo,
           station: record.station?.nombre,
           mileage: record.kilometraje_actual, gallons: record.galones, value: record.valor_total, level: record.nivel_tanque,
           realYield: record.rendimiento_real ?? "-", expectedYield: record.rendimiento_esperado, range: record.alcance_estimado,
           alert: record.alerta_rendimiento ? "ALERTA" : "OK", dispatcher: record.despachador?.full_name, notes: record.observaciones,
           lat: record.gps_lat, lng: record.gps_lng, accuracy: record.gps_precision, maps: record.gps_maps_url,
-          dashboard: photos.tablero, invoice: photos.factura, timestamp: record.created_at,
+          dashboard: photos.tablero, tankLevelPhoto: photos.nivel_tanque, invoice: photos.factura, timestamp: record.created_at,
         })
       })
       sheet.views = [{ state: "frozen", ySplit: 1 }]
@@ -153,15 +154,15 @@ export function RecordsView({ operatorId, allowDelete = false, embedded = false 
       </CardHeader>
       <CardContent className="p-0 overflow-x-auto">
         <table className="w-full text-sm"><thead><tr className="border-t text-left"><th className="p-3">Orden</th><th className="p-3">Fecha</th><th className="p-3">Operario</th><th className="p-3">Moto</th><th className="p-3">Estacion</th><th className="p-3">Galones</th><th className="p-3">Valor</th><th className="p-3">Rendimiento</th><th className="p-3"></th></tr></thead><tbody>
-          {!filtered.length ? <tr><td colSpan={9} className="p-8 text-center text-muted-foreground">No hay registros para mostrar.</td></tr> : filtered.map((record) => <tr key={record.id} className="border-t"><td className="p-3 font-mono">{record.fuel_orders?.num}</td><td className="p-3">{formatDate(record.fecha)}</td><td className="p-3">{record.profiles?.full_name}</td><td className="p-3">{record.vehicles?.placa}</td><td className="p-3">{record.station?.nombre || "-"}</td><td className="p-3">{record.galones}</td><td className="p-3">{formatCurrency(record.valor_total)}</td><td className="p-3">{record.rendimiento_real ?? "-"} {record.alerta_rendimiento && <Badge variant="destructive">alerta</Badge>}</td><td className="p-3"><Button variant="ghost" size="icon" onClick={() => openDetail(record)}><Eye className="w-4 h-4" /></Button></td></tr>)}
+          {!filtered.length ? <tr><td colSpan={9} className="p-8 text-center text-muted-foreground">No hay registros para mostrar.</td></tr> : filtered.map((record) => <tr key={record.id} className="border-t"><td className="p-3 font-mono">{record.fuel_orders?.num}</td><td className="p-3">{formatDate(record.fecha)}</td><td className="p-3">{record.profiles?.full_name}</td><td className="p-3">{record.vehicles?.placa}</td><td className="p-3">{record.station?.nombre || "-"}</td><td className="p-3">{formatNumber(record.galones)}</td><td className="p-3">{formatCurrency(record.valor_total)}</td><td className="p-3">{formatNumber(record.rendimiento_real)} {record.alerta_rendimiento && <Badge variant="destructive">alerta</Badge>}</td><td className="p-3"><Button variant="ghost" size="icon" onClick={() => openDetail(record)}><Eye className="w-4 h-4" /></Button></td></tr>)}
         </tbody></table>
       </CardContent>
 
       <Dialog open={Boolean(selected)} onOpenChange={(open) => !open && setSelected(null)}><DialogContent className="max-h-[90vh] overflow-y-auto"><DialogHeader><DialogTitle>Detalle de tanqueo</DialogTitle><DialogDescription>Consulta los datos, evidencias y comprobante del tanqueo.</DialogDescription></DialogHeader>{selected && <div className="space-y-3 text-sm">
-        <div className="grid grid-cols-2 gap-2"><p>Orden: <strong>{selected.fuel_orders?.num}</strong></p><p>Fecha: <strong>{formatDate(selected.fecha)}</strong></p><p>Operario: <strong>{selected.profiles?.full_name}</strong></p><p>Cedula: <strong>{selected.profiles?.cedula || "-"}</strong></p><p>Moto: <strong>{selected.vehicles?.placa}</strong></p><p>Marca: <strong>{selected.vehicles?.marca}</strong></p><p>Estacion: <strong>{selected.station?.nombre || "-"}</strong></p><p>KM: <strong>{selected.kilometraje_actual}</strong></p><p>Galones: <strong>{selected.galones}</strong></p><p>Valor: <strong>{formatCurrency(selected.valor_total)}</strong></p><p>Nivel: <strong>{selected.nivel_tanque}</strong></p><p>Rendimiento: <strong>{selected.rendimiento_real ?? "-"} km/gal</strong></p><p>Alcance: <strong>{selected.alcance_estimado} km</strong></p></div>
+        <div className="grid grid-cols-2 gap-2"><p>Orden: <strong>{selected.fuel_orders?.num}</strong></p><p>Fecha: <strong>{formatDate(selected.fecha)}</strong></p><p>Operario: <strong>{selected.profiles?.full_name}</strong></p><p>Cedula: <strong>{selected.profiles?.cedula || "-"}</strong></p><p>Moto: <strong>{selected.vehicles?.placa}</strong></p><p>Marca: <strong>{selected.vehicles?.marca}</strong></p><p>Estacion: <strong>{selected.station?.nombre || "-"}</strong></p><p>KM: <strong>{formatNumber(selected.kilometraje_actual)}</strong></p><p>Galones: <strong>{formatNumber(selected.galones)}</strong></p><p>Valor: <strong>{formatCurrency(selected.valor_total)}</strong></p><p>Nivel: <strong>{selected.nivel_tanque}</strong></p><p>Rendimiento: <strong>{formatNumber(selected.rendimiento_real)} km/gal</strong></p><p>Alcance: <strong>{formatNumber(selected.alcance_estimado)} km</strong></p></div>
         {selected.observaciones && <p className="rounded-md bg-muted p-2">{selected.observaciones}</p>}
         {selected.gps_maps_url && <a href={selected.gps_maps_url} target="_blank" rel="noreferrer" className="flex gap-1 text-blue-500 underline"><MapPin className="w-4 h-4" /> Abrir ubicacion en Google Maps</a>}
-        <div className="grid grid-cols-3 gap-2">{(selected.order_photos || []).map((photo) => <a href={photo.photo_url} target="_blank" rel="noreferrer" key={photo.id}><img src={photo.photo_url} alt={photo.tipo} className="aspect-square w-full rounded-md object-cover" onError={(event) => { event.currentTarget.style.display = "none" }} /><small className="block text-center uppercase">{photo.tipo}</small></a>)}</div>
+        <div className="grid grid-cols-3 gap-2">{(selected.order_photos || []).map((photo) => <a href={photo.photo_url} target="_blank" rel="noreferrer" key={photo.id}><img src={photo.photo_url} alt={formatPhotoType(photo.tipo)} className="aspect-square w-full rounded-md object-cover" onError={(event) => { event.currentTarget.style.display = "none" }} /><small className="block text-center uppercase">{formatPhotoType(photo.tipo)}</small></a>)}</div>
         <div className="flex flex-wrap gap-2 border-t pt-3">{orderFor(selected) && <><Button variant="outline" onClick={() => printFuelOrder(orderFor(selected)!, settings, selected.order_photos)}><Printer className="w-4 h-4 mr-1" /> Imprimir</Button><Button variant="outline" onClick={() => downloadFuelOrderPdf(orderFor(selected)!, settings).catch((error) => toast.error(error.message))}><Download className="w-4 h-4 mr-1" /> Descargar PDF</Button></>}{allowDelete && <Button variant="destructive" onClick={() => deleteRecord(selected)}><Trash2 className="w-4 h-4 mr-1" /> Eliminar</Button>}</div>
       </div>}</DialogContent></Dialog>
       </Card>

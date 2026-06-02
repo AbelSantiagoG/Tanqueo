@@ -1,4 +1,4 @@
-import { effectiveOrderStatus, formatCurrency, formatDate } from "@/lib/fuel-utils"
+import { effectiveOrderStatus, formatCurrency, formatDate, formatNumber } from "@/lib/fuel-utils"
 import type { CompanySettings, FuelOrder, OrderPhoto } from "@/lib/types"
 
 function escapeHtml(value?: string | number | null) {
@@ -75,11 +75,11 @@ function buildFuelOrderDocument(order: FuelOrder, settings?: CompanySettings | n
         <div style="margin-bottom:5px;color:#6b7590;font-size:8px;font-weight:700;letter-spacing:1px;text-transform:uppercase">Moto / Placa</div>
         <div style="font-size:20px;font-weight:900;letter-spacing:2px">${escapeHtml(order.vehicles?.placa)}</div>
         <div style="font-size:8px;color:#6b7590">${escapeHtml(order.vehicles?.marca)} ${escapeHtml(order.vehicles?.modelo)}</div>
-        <div style="font-size:8px;color:#6b7590">Cap: ${escapeHtml(order.vehicles?.capacidad_tanque)} gal - ${escapeHtml(order.vehicles?.color)}</div>
+        <div style="font-size:8px;color:#6b7590">Capacidad: ${escapeHtml(formatNumber(order.vehicles?.capacidad_tanque))} gal - ${escapeHtml(order.vehicles?.color)}</div>
       </div>
       <div style="flex:1;padding:8px 10px;text-align:center">
         <div style="margin-bottom:3px;color:#9ca3af;font-size:8px;font-weight:700;letter-spacing:1px;text-transform:uppercase">Galones suministrados</div>
-        <div style="color:#9ca3af;font-size:36px;font-weight:900;line-height:1">${isExecuted ? escapeHtml(order.galones) : "-"}</div>
+        <div style="color:#9ca3af;font-size:36px;font-weight:900;line-height:1">${isExecuted ? escapeHtml(formatNumber(order.galones)) : "-"}</div>
         <div style="margin-top:3px;color:#9ca3af;font-size:8px">${escapeHtml(station?.combustible || "Combustible")}</div>
       </div>
     </div>
@@ -87,10 +87,10 @@ function buildFuelOrderDocument(order: FuelOrder, settings?: CompanySettings | n
       <div style="margin-bottom:4px;color:#0a7c4d;font-size:8px;font-weight:700;letter-spacing:1px;text-transform:uppercase">&#9745; Datos de ejecucion</div>
       <div style="display:flex;flex-wrap:wrap;gap:12px;font-size:8px">
         <span><strong>Fecha:</strong> ${formatDate(order.fecha_ejecucion)}</span>
-        <span><strong>Gal reales:</strong> ${escapeHtml(order.galones)}</span>
+        <span><strong>Galones reales:</strong> ${escapeHtml(formatNumber(order.galones))}</span>
         <span><strong>Valor:</strong> ${formatCurrency(order.valor_total)}</span>
-        <span><strong>KM:</strong> ${Number(order.kilometraje_actual || 0).toLocaleString("es-CO")}</span>
-        ${order.rendimiento_real ? `<span><strong>Rendimiento:</strong> ${escapeHtml(order.rendimiento_real)} km/gal</span>` : ""}
+        <span><strong>KM:</strong> ${formatNumber(order.kilometraje_actual)}</span>
+        ${order.rendimiento_real ? `<span><strong>Rendimiento:</strong> ${escapeHtml(formatNumber(order.rendimiento_real))} km/gal</span>` : ""}
         ${order.gps_lat && order.gps_lng ? `<span><strong>GPS:</strong> ${escapeHtml(order.gps_lat)}, ${escapeHtml(order.gps_lng)}</span>` : ""}
       </div>
     </div>` : ""}
@@ -111,7 +111,7 @@ export function printFuelOrder(order: FuelOrder, settings?: CompanySettings | nu
   void _photos
   const popup = window.open("", "_blank")
   if (!popup) throw new Error("El navegador bloqueo la ventana de impresion.")
-  popup.document.write(`<!doctype html><html lang="es"><head><meta charset="utf-8"><title>${escapeHtml(order.num)}</title><style>@page{size:8.5in 5.5in;margin:0}*{box-sizing:border-box;-webkit-print-color-adjust:exact;print-color-adjust:exact}html,body{margin:0;background:#fff}</style></head><body>${buildFuelOrderDocument(order, settings)}</body></html>`)
+  popup.document.write(`<!doctype html><html lang="es"><head><meta charset="utf-8"><title>${escapeHtml(order.num)}</title><style>@page{size:letter portrait;margin:0}*{box-sizing:border-box;-webkit-print-color-adjust:exact;print-color-adjust:exact}html,body{width:8.5in;height:11in;margin:0;background:#fff}#fuel-order-document{break-after:avoid;page-break-after:avoid}</style></head><body>${buildFuelOrderDocument(order, settings)}</body></html>`)
   popup.document.close()
   popup.addEventListener("afterprint", () => popup.close(), { once: true })
   void waitForImages(popup.document).then(() => {

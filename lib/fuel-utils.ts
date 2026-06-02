@@ -32,7 +32,43 @@ export function effectiveOrderStatus(order: Pick<FuelOrder, "estado" | "fecha_ve
 }
 
 export function formatCurrency(value?: number | null) {
-  return `$${Number(value || 0).toLocaleString("es-CO")} COP`
+  if (value === null || value === undefined) return "-"
+  return `$${formatNumber(value)} COP`
+}
+
+export function formatNumber(value?: number | null, maximumFractionDigits = 2) {
+  if (value === null || value === undefined || Number.isNaN(Number(value))) return "-"
+  return Number(value).toLocaleString("es-CO", { maximumFractionDigits })
+}
+
+export function formatOrderStatus(status: OrderStatus | "todas") {
+  return {
+    todas: "Todas",
+    pendiente: "Pendiente",
+    vencida: "Vencida",
+    ejecutada: "Ejecutada",
+    verificado: "Verificada",
+    observacion: "Con observacion",
+    cerrada: "Cerrada",
+  }[status]
+}
+
+export function formatRole(role: string) {
+  return {
+    admin: "Administrador",
+    despachador: "Despachador",
+    operario: "Operario",
+  }[role] || role
+}
+
+export function formatPhotoType(type: string) {
+  return {
+    tablero: "Tablero",
+    nivel_tanque: "Nivel del tanque",
+    factura: "Factura",
+    odometro: "Odometro",
+    tanque: "Tanque",
+  }[type] || type
 }
 
 export function formatDate(value?: string | null) {

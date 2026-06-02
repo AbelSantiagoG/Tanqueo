@@ -6,7 +6,7 @@ import { AlertTriangle, BarChart3, Building2, Car, ClipboardList, DollarSign, Ed
 import { Bar, BarChart, CartesianGrid, Cell, Legend, Line, LineChart, Pie, PieChart, ResponsiveContainer, Tooltip, XAxis, YAxis } from "recharts"
 import { toast } from "sonner"
 import { loadFuelRecords } from "@/lib/fuel-service"
-import { BRAND_YIELDS, VEHICLE_BRANDS, formatCurrency } from "@/lib/fuel-utils"
+import { BRAND_YIELDS, VEHICLE_BRANDS, formatCurrency, formatNumber, formatOrderStatus, formatRole } from "@/lib/fuel-utils"
 import { hasStationSchema } from "@/lib/schema-capabilities"
 import { supabase } from "@/lib/supabase"
 import type { CompanySettings, FuelOrder, FuelRecord, Profile, ServiceStation, UserRole, Vehicle } from "@/lib/types"
@@ -209,19 +209,19 @@ export function AdminView() {
       {!stationSchemaReady && <SchemaUpdateAlert />}
       <Tabs defaultValue="dashboard">
         <TabsList className="h-auto flex-wrap justify-start">
-          <TabsTrigger value="dashboard">Dashboard</TabsTrigger><TabsTrigger value="ordenes">Ordenes</TabsTrigger><TabsTrigger value="registros">Registros</TabsTrigger><TabsTrigger value="flota">Flota</TabsTrigger><TabsTrigger value="estaciones">Estaciones</TabsTrigger><TabsTrigger value="personal">Personal</TabsTrigger><TabsTrigger value="config">Configuracion</TabsTrigger>
+          <TabsTrigger value="dashboard">Resumen</TabsTrigger><TabsTrigger value="ordenes">Ordenes</TabsTrigger><TabsTrigger value="registros">Registros</TabsTrigger><TabsTrigger value="flota">Flota</TabsTrigger><TabsTrigger value="estaciones">Estaciones</TabsTrigger><TabsTrigger value="personal">Personal</TabsTrigger><TabsTrigger value="config">Configuracion</TabsTrigger>
         </TabsList>
         <TabsContent value="dashboard" className="space-y-4">
           <div className="grid grid-cols-2 md:grid-cols-4 xl:grid-cols-8 gap-3">
-            <Metric label="Registros" value={records.length} icon={<ClipboardList />} /><Metric label="Galones totales" value={metrics.gallons.toFixed(1)} icon={<Fuel />} /><Metric label="Gasto total" value={`$${(metrics.value / 1_000_000).toFixed(1)}M`} icon={<DollarSign />} /><Metric label="Motos activas" value={vehicles.filter((item) => item.activo !== false).length} icon={<Car />} /><Metric label="Estaciones activas" value={stations.filter((item) => item.activo).length} icon={<Building2 />} /><Metric label="Prom. gal/registro" value={metrics.average.toFixed(2)} icon={<BarChart3 />} /><Metric label="Alertas" value={metrics.alerts} icon={<AlertTriangle />} /><Metric label="Ordenes pendientes" value={metrics.pending} icon={<ClipboardList />} />
+            <Metric label="Registros" value={records.length} icon={<ClipboardList />} /><Metric label="Galones totales" value={formatNumber(metrics.gallons)} icon={<Fuel />} /><Metric label="Gasto total" value={`$${formatNumber(metrics.value / 1_000_000)} M`} icon={<DollarSign />} /><Metric label="Motos activas" value={vehicles.filter((item) => item.activo !== false).length} icon={<Car />} /><Metric label="Estaciones activas" value={stations.filter((item) => item.activo).length} icon={<Building2 />} /><Metric label="Prom. gal/registro" value={formatNumber(metrics.average)} icon={<BarChart3 />} /><Metric label="Alertas" value={metrics.alerts} icon={<AlertTriangle />} /><Metric label="Ordenes pendientes" value={metrics.pending} icon={<ClipboardList />} />
           </div>
           <div className="grid lg:grid-cols-2 gap-4">
-            <Chart title="Consumo mensual"><BarChart data={monthly}><CartesianGrid strokeDasharray="3 3" /><XAxis dataKey="name" /><YAxis /><Tooltip /><Bar dataKey="gallons" fill="#1a56db" /></BarChart></Chart>
-            <Chart title="Gasto por operario"><BarChart data={byOperator}><CartesianGrid strokeDasharray="3 3" /><XAxis dataKey="name" /><YAxis /><Tooltip /><Bar dataKey="value" fill="#0ea768" /></BarChart></Chart>
-            <Chart title="Rendimiento km/gal por moto"><BarChart data={byVehicle.map((item) => ({ ...item, averageYield: item.yieldCount ? item.yield / item.yieldCount : 0 }))}><CartesianGrid strokeDasharray="3 3" /><XAxis dataKey="name" /><YAxis /><Tooltip /><Bar dataKey="averageYield" fill="#d97706" /></BarChart></Chart>
-            <Chart title="Distribucion por marca"><PieChart><Pie data={byBrand} dataKey="value" nameKey="name" outerRadius={85}>{byBrand.map((item, index) => <Cell key={item.name} fill={CHART_COLORS[index % CHART_COLORS.length]} />)}</Pie><Tooltip /><Legend /></PieChart></Chart>
-            <Chart title="Distribucion por placa"><PieChart><Pie data={byVehicle} dataKey="gallons" nameKey="name" outerRadius={85}>{byVehicle.map((item, index) => <Cell key={item.name} fill={CHART_COLORS[index % CHART_COLORS.length]} />)}</Pie><Tooltip /><Legend /></PieChart></Chart>
-            <Chart title="Evolucion de costos" wide><LineChart data={monthly}><CartesianGrid strokeDasharray="3 3" /><XAxis dataKey="name" /><YAxis /><Tooltip /><Line type="monotone" dataKey="value" stroke="#7c3aed" /></LineChart></Chart>
+            <Chart title="Consumo mensual"><BarChart data={monthly}><CartesianGrid strokeDasharray="3 3" /><XAxis dataKey="name" /><YAxis /><Tooltip formatter={chartTooltip} /><Bar dataKey="gallons" name="Galones" fill="#1a56db" /></BarChart></Chart>
+            <Chart title="Gasto por operario"><BarChart data={byOperator}><CartesianGrid strokeDasharray="3 3" /><XAxis dataKey="name" /><YAxis /><Tooltip formatter={chartTooltip} /><Bar dataKey="value" name="Valor" fill="#0ea768" /></BarChart></Chart>
+            <Chart title="Rendimiento km/gal por moto"><BarChart data={byVehicle.map((item) => ({ ...item, averageYield: item.yieldCount ? item.yield / item.yieldCount : 0 }))}><CartesianGrid strokeDasharray="3 3" /><XAxis dataKey="name" /><YAxis /><Tooltip formatter={chartTooltip} /><Bar dataKey="averageYield" name="Rendimiento promedio" fill="#d97706" /></BarChart></Chart>
+            <Chart title="Distribucion por marca"><PieChart><Pie data={byBrand} dataKey="value" nameKey="name" outerRadius={85}>{byBrand.map((item, index) => <Cell key={item.name} fill={CHART_COLORS[index % CHART_COLORS.length]} />)}</Pie><Tooltip formatter={chartTooltip} /><Legend /></PieChart></Chart>
+            <Chart title="Distribucion por placa"><PieChart><Pie data={byVehicle} dataKey="gallons" nameKey="name" outerRadius={85}>{byVehicle.map((item, index) => <Cell key={item.name} fill={CHART_COLORS[index % CHART_COLORS.length]} />)}</Pie><Tooltip formatter={chartTooltip} /><Legend /></PieChart></Chart>
+            <Chart title="Evolucion de costos" wide><LineChart data={monthly}><CartesianGrid strokeDasharray="3 3" /><XAxis dataKey="name" /><YAxis /><Tooltip formatter={chartTooltip} /><Line type="monotone" dataKey="value" name="Valor" stroke="#7c3aed" /></LineChart></Chart>
           </div>
           <SummaryTables byVehicle={byVehicle} byOperator={byOperator} byBrand={byBrand} orders={orders} />
         </TabsContent>
@@ -229,7 +229,7 @@ export function AdminView() {
         <TabsContent value="registros"><RecordsView allowDelete embedded /></TabsContent>
         <TabsContent value="flota">
           <Section title="Flota de motos" button={<Button onClick={() => { setVehicleDraft(EMPTY_VEHICLE); setShowVehicle(true) }}><Plus className="w-4 h-4 mr-1" /> Nueva moto</Button>}>
-            <div className="grid md:grid-cols-2 xl:grid-cols-3 gap-3">{vehicles.length ? vehicles.map((vehicle) => <Card key={vehicle.id}><CardHeader><CardTitle>{vehicle.placa}</CardTitle></CardHeader><CardContent className="space-y-1 text-sm"><p>{vehicle.marca} {vehicle.modelo}</p><p>Capacidad: {vehicle.capacidad_tanque} gal</p><p>Rendimiento: {vehicle.rendimiento_esperado} km/gal</p><p>Operario: {vehicle.profiles?.full_name || "Sin asignar"}</p><div className="flex gap-2 pt-2"><Button variant="outline" size="sm" onClick={() => { setVehicleDraft(vehicle); setShowVehicle(true) }}><Edit className="w-4 h-4" /></Button><Button variant="destructive" size="sm" onClick={() => deleteVehicle(vehicle)}><Trash2 className="w-4 h-4" /></Button></div></CardContent></Card>) : <p className="text-muted-foreground">No hay motos registradas.</p>}</div>
+            <div className="grid md:grid-cols-2 xl:grid-cols-3 gap-3">{vehicles.length ? vehicles.map((vehicle) => <Card key={vehicle.id}><CardHeader><CardTitle>{vehicle.placa}</CardTitle></CardHeader><CardContent className="space-y-1 text-sm"><p>{vehicle.marca} {vehicle.modelo}</p><p>Capacidad: {formatNumber(vehicle.capacidad_tanque)} gal</p><p>Rendimiento: {formatNumber(vehicle.rendimiento_esperado)} km/gal</p><p>Operario: {vehicle.profiles?.full_name || "Sin asignar"}</p><div className="flex gap-2 pt-2"><Button variant="outline" size="sm" onClick={() => { setVehicleDraft(vehicle); setShowVehicle(true) }}><Edit className="w-4 h-4" /></Button><Button variant="destructive" size="sm" onClick={() => deleteVehicle(vehicle)}><Trash2 className="w-4 h-4" /></Button></div></CardContent></Card>) : <p className="text-muted-foreground">No hay motos registradas.</p>}</div>
           </Section>
         </TabsContent>
         <TabsContent value="estaciones">
@@ -239,7 +239,7 @@ export function AdminView() {
         </TabsContent>
         <TabsContent value="personal">
           <Section title="Operarios y despachadores" button={<Button onClick={() => { setProfileDraft(EMPTY_PROFILE); setShowProfile(true) }}><Plus className="w-4 h-4 mr-1" /> Nuevo usuario</Button>}>
-            <div className="overflow-x-auto"><table className="w-full text-sm"><thead><tr className="text-left"><th className="p-3">Nombre</th><th className="p-3">Rol</th><th className="p-3">Cedula</th><th className="p-3">Telefono</th><th className="p-3">Zona</th><th></th></tr></thead><tbody>{profiles.map((profile) => <tr key={profile.id} className="border-t"><td className="p-3">{profile.full_name}</td><td className="p-3"><Badge>{profile.role}</Badge></td><td className="p-3">{profile.cedula}</td><td className="p-3">{profile.telefono}</td><td className="p-3">{profile.zona}</td><td className="p-3 flex gap-1"><Button variant="ghost" size="icon" onClick={() => { setProfileDraft(profile); setShowProfile(true) }}><Edit className="w-4 h-4" /></Button><Button variant="ghost" size="icon" onClick={() => deleteProfile(profile)}><Trash2 className="w-4 h-4 text-red-500" /></Button></td></tr>)}</tbody></table></div>
+            <div className="overflow-x-auto"><table className="w-full text-sm"><thead><tr className="text-left"><th className="p-3">Nombre</th><th className="p-3">Rol</th><th className="p-3">Cedula</th><th className="p-3">Telefono</th><th className="p-3">Zona</th><th></th></tr></thead><tbody>{profiles.map((profile) => <tr key={profile.id} className="border-t"><td className="p-3">{profile.full_name}</td><td className="p-3"><Badge>{formatRole(profile.role)}</Badge></td><td className="p-3">{profile.cedula}</td><td className="p-3">{profile.telefono}</td><td className="p-3">{profile.zona}</td><td className="p-3 flex gap-1"><Button variant="ghost" size="icon" onClick={() => { setProfileDraft(profile); setShowProfile(true) }}><Edit className="w-4 h-4" /></Button><Button variant="ghost" size="icon" onClick={() => deleteProfile(profile)}><Trash2 className="w-4 h-4 text-red-500" /></Button></td></tr>)}</tbody></table></div>
           </Section>
         </TabsContent>
         <TabsContent value="config">
@@ -265,7 +265,7 @@ export function AdminView() {
         <Field label="Nombre"><Input value={stationDraft.nombre || ""} onChange={(event) => setStationDraft({ ...stationDraft, nombre: event.target.value })} /></Field><Field label="NIT"><Input value={stationDraft.nit || ""} onChange={(event) => setStationDraft({ ...stationDraft, nit: event.target.value })} /></Field>
         <Field label="Direccion"><Input value={stationDraft.direccion || ""} onChange={(event) => setStationDraft({ ...stationDraft, direccion: event.target.value })} /></Field><Field label="Telefono"><Input value={stationDraft.telefono || ""} onChange={(event) => setStationDraft({ ...stationDraft, telefono: event.target.value })} /></Field>
         <Field label="Combustible"><Input value={stationDraft.combustible || ""} onChange={(event) => setStationDraft({ ...stationDraft, combustible: event.target.value })} /></Field>
-        <Field label="Logo URL"><Input value={stationDraft.logo_url || ""} onChange={(event) => setStationDraft({ ...stationDraft, logo_url: event.target.value })} /></Field><Field label="Estado"><Select value={stationDraft.activo === false ? "inactive" : "active"} onValueChange={(value) => setStationDraft({ ...stationDraft, activo: value === "active" })}><SelectTrigger><SelectValue /></SelectTrigger><SelectContent><SelectItem value="active">Activa</SelectItem><SelectItem value="inactive">Inactiva</SelectItem></SelectContent></Select></Field>
+        <Field label="Enlace del logo"><Input value={stationDraft.logo_url || ""} onChange={(event) => setStationDraft({ ...stationDraft, logo_url: event.target.value })} /></Field><Field label="Estado"><Select value={stationDraft.activo === false ? "inactive" : "active"} onValueChange={(value) => setStationDraft({ ...stationDraft, activo: value === "active" })}><SelectTrigger><SelectValue /></SelectTrigger><SelectContent><SelectItem value="active">Activa</SelectItem><SelectItem value="inactive">Inactiva</SelectItem></SelectContent></Select></Field>
         <Button className="col-span-2">Guardar estacion</Button>
       </form></DialogContent></Dialog>
 
@@ -290,7 +290,7 @@ function Chart({ title, children, wide = false }: { title: string; children: Rea
 
 function SummaryTables({ byVehicle, byOperator, byBrand, orders }: { byVehicle: any[]; byOperator: any[]; byBrand: any[]; orders: FuelOrder[] }) {
   const states = ["pendiente", "ejecutada", "vencida", "cerrada", "verificado", "observacion"]
-  return <div className="grid lg:grid-cols-2 gap-4"><SmallTable title="Resumen por moto" rows={byVehicle.map((item) => [item.name, item.count || 0, `${(item.gallons || 0).toFixed(1)} gal`, formatCurrency(item.value)])} /><SmallTable title="Resumen por operario" rows={byOperator.map((item) => [item.name, "-", "-", formatCurrency(item.value)])} /><SmallTable title="Rendimiento por marca" rows={byBrand.map((item) => [item.name, item.count || 0, `${(item.gallons || 0).toFixed(1)} gal`, item.yieldCount ? `${(item.yield / item.yieldCount).toFixed(1)} km/gal` : "-"])} /><SmallTable title="Estado de ordenes" rows={states.map((state) => [state, orders.filter((item) => item.estado === state).length, "", ""])} /></div>
+  return <div className="grid lg:grid-cols-2 gap-4"><SmallTable title="Resumen por moto" rows={byVehicle.map((item) => [item.name, item.count || 0, `${formatNumber(item.gallons || 0)} gal`, formatCurrency(item.value)])} /><SmallTable title="Resumen por operario" rows={byOperator.map((item) => [item.name, "-", "-", formatCurrency(item.value)])} /><SmallTable title="Rendimiento por marca" rows={byBrand.map((item) => [item.name, item.count || 0, `${formatNumber(item.gallons || 0)} gal`, item.yieldCount ? `${formatNumber(item.yield / item.yieldCount)} km/gal` : "-"])} /><SmallTable title="Estado de ordenes" rows={states.map((state) => [formatOrderStatus(state as FuelOrder["estado"]), orders.filter((item) => item.estado === state).length, "", ""])} /></div>
 }
 
 function SmallTable({ title, rows }: { title: string; rows: Array<Array<string | number>> }) {
@@ -322,4 +322,8 @@ function aggregate<T extends Record<string, number>>(records: FuelRecord[], key:
     Object.entries(values(record)).forEach(([valueKey, value]) => { result[name][valueKey] = (result[name][valueKey] || 0) + value })
   })
   return Object.entries(result).map(([name, values]) => ({ name, ...values })) as Array<{ name: string } & T>
+}
+
+function chartTooltip(value: number | string | Array<number | string>, name: string) {
+  return [formatNumber(Number(value)), { gallons: "Galones", value: "Valor", averageYield: "Rendimiento promedio" }[name] || name]
 }

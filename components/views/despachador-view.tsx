@@ -1,11 +1,12 @@
 "use client"
 
 import { useCallback, useEffect, useMemo, useState } from "react"
-import { ClipboardList, Download, Eye, MapPin, Plus, Printer, RefreshCw, Search, Trash2 } from "lucide-react"
+import { ClipboardList, Download, Edit, Eye, MapPin, Plus, Printer, RefreshCw, Search, Trash2 } from "lucide-react"
 import { toast } from "sonner"
 import { useAuth } from "@/lib/auth-context"
-import { createFuelOrder, expireFuelOrders } from "@/lib/fuel-service"
-import { formatCurrency, formatDate, todayIso } from "@/lib/fuel-utils"
+import { createFuelOrder, expireFuelOrders, updateFuelOrder } from "@/lib/fuel-service"
+import { formatCurrency, formatDate, formatNumber, formatOrderStatus, formatPhotoType, todayIso } from "@/lib/fuel-utils"
+import { notifyClosedOrder } from "@/lib/notifications"
 import { downloadFuelOrderPdf, printFuelOrder } from "@/lib/order-print"
 import { hasStationSchema } from "@/lib/schema-capabilities"
 import { supabase } from "@/lib/supabase"
@@ -33,6 +34,8 @@ export function DespachadorView({ embedded = false }: { embedded?: boolean }) {
   const [statusFilter, setStatusFilter] = useState("todas")
   const [search, setSearch] = useState("")
   const [showCreate, setShowCreate] = useState(false)
+  const [showEdit, setShowEdit] = useState(false)
+  const [editingOrder, setEditingOrder] = useState<FuelOrder | null>(null)
   const [saving, setSaving] = useState(false)
   const [operatorId, setOperatorId] = useState("")
   const [vehicleId, setVehicleId] = useState("")
@@ -105,6 +108,36 @@ export function DespachadorView({ embedded = false }: { embedded?: boolean }) {
     }
   }
 
+  const openEdit = (order: FuelOrder) => {
+    setEditingOrder(order)
+    setOperatorId(order.operator_id)
+    setVehicleId(order.vehicle_id)
+    setStationId(order.station_id || "")
+    setIssueDate(order.fecha_emision)
+    setExpiryDate(order.fecha_vencimiento)
+    setNotes(order.observaciones || "")
+    setSelected(null)
+    setShowEdit(true)
+  }
+
+  const saveOrderEdit = async (event: React.FormEvent) => {
+    event.preventDefault()
+    if (!editingOrder || !operatorId || !vehicleId || !stationId || !issueDate || !expiryDate) return toast.error("Completa los campos obligatorios.")
+    setSaving(true)
+    try {
+      const order = await updateFuelOrder({ orderId: editingOrder.id, operatorId, vehicleId, stationId, issueDate, expiryDate, notes })
+      toast.success(`Orden ${order.num} actualizada correctamente.`)
+      setShowEdit(false)
+      setEditingOrder(null)
+      await load()
+    } catch (error: any) {
+      console.error(error)
+      toast.error(error.message || "No se pudo actualizar la orden.")
+    } finally {
+      setSaving(false)
+    }
+  }
+
   const openDetail = async (order: FuelOrder) => {
     setSelected(order)
     const { data, error } = await supabase.from("order_photos").select("*").eq("order_id", order.id)
@@ -117,6 +150,11 @@ export function DespachadorView({ embedded = false }: { embedded?: boolean }) {
     const { error } = await supabase.from("fuel_orders").update({ estado }).eq("id", order.id)
     if (error) return toast.error(error.message)
     toast.success(`Orden ${order.num} actualizada.`)
+    if (estado === "cerrada") {
+      notifyClosedOrder(order.id)
+        .then((result) => toast.success(result.message))
+        .catch((error) => toast.warning(error.message || "La orden se cerro, pero no se pudo notificar al administrador."))
+    }
     setSelected(null)
     await load()
   }
@@ -139,7 +177,7 @@ export function DespachadorView({ embedded = false }: { embedded?: boolean }) {
     return matchesText && (statusFilter === "todas" || order.estado === statusFilter)
   }), [orders, search, statusFilter])
 
-  const badge = (status: FuelOrder["estado"]) => <Badge variant={status === "vencida" ? "destructive" : "secondary"} className={status === "ejecutada" || status === "verificado" ? "bg-emerald-500/15 text-emerald-600" : ""}>{status}</Badge>
+  const badge = (status: FuelOrder["estado"]) => <Badge variant={status === "vencida" ? "destructive" : "secondary"} className={status === "ejecutada" || status === "verificado" ? "bg-emerald-500/15 text-emerald-600" : ""}>{formatOrderStatus(status)}</Badge>
 
   return (
     <div className="space-y-5">
@@ -156,20 +194,20 @@ export function DespachadorView({ embedded = false }: { embedded?: boolean }) {
               <CardTitle className="flex gap-2"><ClipboardList className="w-5 h-5" /> Ordenes de suministro</CardTitle>
               <div className="flex flex-wrap gap-2">
                 <div className="relative"><Search className="absolute left-3 top-3 w-4 h-4 text-muted-foreground" /><Input value={search} onChange={(event) => setSearch(event.target.value)} className="pl-9" placeholder="Buscar orden, placa u operario" /></div>
-                <Select value={statusFilter} onValueChange={setStatusFilter}><SelectTrigger className="w-36"><SelectValue /></SelectTrigger><SelectContent>{["todas", "pendiente", "ejecutada", "vencida", "cerrada", "verificado", "observacion"].map((status) => <SelectItem key={status} value={status}>{status}</SelectItem>)}</SelectContent></Select>
+                <Select value={statusFilter} onValueChange={setStatusFilter}><SelectTrigger className="w-36"><SelectValue /></SelectTrigger><SelectContent>{(["todas", "pendiente", "ejecutada", "vencida", "cerrada", "verificado", "observacion"] as const).map((status) => <SelectItem key={status} value={status}>{formatOrderStatus(status)}</SelectItem>)}</SelectContent></Select>
                 <Button variant="outline" size="icon" onClick={load}><RefreshCw className="w-4 h-4" /></Button>
                 <Button onClick={openCreate} disabled={!stationSchemaReady} className="bg-amber-600 hover:bg-amber-700"><Plus className="w-4 h-4 mr-1" /> Nueva orden</Button>
               </div>
             </CardHeader>
             <CardContent className="p-0 overflow-x-auto">
               <table className="w-full text-sm"><thead><tr className="border-t text-left"><th className="p-3">Orden</th><th className="p-3">Moto</th><th className="p-3">Operario</th><th className="p-3">Estacion</th><th className="p-3">Galones registrados</th><th className="p-3">Vence</th><th className="p-3">Estado</th><th className="p-3"></th></tr></thead><tbody>
-                {!filteredOrders.length ? <tr><td colSpan={8} className="p-8 text-center text-muted-foreground">Sin ordenes para mostrar.</td></tr> : filteredOrders.map((order) => <tr key={order.id} className="border-t"><td className="p-3 font-mono font-bold">{order.num}</td><td className="p-3">{order.vehicles?.placa}</td><td className="p-3">{order.profiles?.full_name}</td><td className="p-3">{order.station?.nombre || "-"}</td><td className="p-3">{order.galones ?? "-"}</td><td className="p-3">{formatDate(order.fecha_vencimiento)}</td><td className="p-3">{badge(order.estado)}</td><td className="p-3"><Button size="icon" variant="ghost" onClick={() => openDetail(order)}><Eye className="w-4 h-4" /></Button></td></tr>)}
+                {!filteredOrders.length ? <tr><td colSpan={8} className="p-8 text-center text-muted-foreground">Sin ordenes para mostrar.</td></tr> : filteredOrders.map((order) => <tr key={order.id} className="border-t"><td className="p-3 font-mono font-bold">{order.num}</td><td className="p-3">{order.vehicles?.placa}</td><td className="p-3">{order.profiles?.full_name}</td><td className="p-3">{order.station?.nombre || "-"}</td><td className="p-3">{formatNumber(order.galones)}</td><td className="p-3">{formatDate(order.fecha_vencimiento)}</td><td className="p-3">{badge(order.estado)}</td><td className="p-3"><Button size="icon" variant="ghost" onClick={() => openDetail(order)}><Eye className="w-4 h-4" /></Button></td></tr>)}
               </tbody></table>
             </CardContent>
           </Card>
         </TabsContent>
         <TabsContent value="flota">
-          <div className="grid md:grid-cols-2 xl:grid-cols-3 gap-3">{vehicles.length ? vehicles.map((vehicle) => <Card key={vehicle.id}><CardHeader><CardTitle>{vehicle.placa}</CardTitle></CardHeader><CardContent className="space-y-1 text-sm"><p>{vehicle.marca} {vehicle.modelo}</p><p>Capacidad: <strong>{vehicle.capacidad_tanque} gal</strong></p><p>Rendimiento esperado: <strong>{vehicle.rendimiento_esperado} km/gal</strong></p><p>Operario: <strong>{vehicle.profiles?.full_name || "Sin asignar"}</strong></p></CardContent></Card>) : <p className="text-muted-foreground">No hay motos registradas.</p>}</div>
+          <div className="grid md:grid-cols-2 xl:grid-cols-3 gap-3">{vehicles.length ? vehicles.map((vehicle) => <Card key={vehicle.id}><CardHeader><CardTitle>{vehicle.placa}</CardTitle></CardHeader><CardContent className="space-y-1 text-sm"><p>{vehicle.marca} {vehicle.modelo}</p><p>Capacidad: <strong>{formatNumber(vehicle.capacidad_tanque)} gal</strong></p><p>Rendimiento esperado: <strong>{formatNumber(vehicle.rendimiento_esperado)} km/gal</strong></p><p>Operario: <strong>{vehicle.profiles?.full_name || "Sin asignar"}</strong></p></CardContent></Card>) : <p className="text-muted-foreground">No hay motos registradas.</p>}</div>
         </TabsContent>
       </Tabs>
 
@@ -184,11 +222,20 @@ export function DespachadorView({ embedded = false }: { embedded?: boolean }) {
         <Button disabled={saving} className="w-full bg-amber-600 hover:bg-amber-700">{saving ? "Guardando..." : "Crear orden"}</Button>
       </form></DialogContent></Dialog>
 
+      <Dialog open={showEdit} onOpenChange={setShowEdit}><DialogContent><DialogHeader><DialogTitle>Editar orden {editingOrder?.num}</DialogTitle><DialogDescription>Actualiza la asignacion o vigencia antes de ejecutar el tanqueo.</DialogDescription></DialogHeader><form onSubmit={saveOrderEdit} className="space-y-3">
+        <Field label="Operario"><Select value={operatorId} onValueChange={setOperatorId}><SelectTrigger><SelectValue placeholder="Selecciona operario" /></SelectTrigger><SelectContent>{operators.map((item) => <SelectItem key={item.id} value={item.id}>{item.full_name}</SelectItem>)}</SelectContent></Select></Field>
+        <Field label="Moto"><Select value={vehicleId} onValueChange={setVehicleId}><SelectTrigger><SelectValue placeholder="Selecciona moto" /></SelectTrigger><SelectContent>{vehicles.map((item) => <SelectItem key={item.id} value={item.id}>{item.placa} | {item.marca}</SelectItem>)}</SelectContent></Select></Field>
+        <Field label="Estacion de servicio"><Select value={stationId} onValueChange={setStationId}><SelectTrigger><SelectValue placeholder="Selecciona estacion" /></SelectTrigger><SelectContent>{stations.map((item) => <SelectItem key={item.id} value={item.id}>{item.nombre} | {item.combustible}</SelectItem>)}</SelectContent></Select></Field>
+        <div className="grid grid-cols-2 gap-3"><Field label="Emision"><Input type="date" value={issueDate} onChange={(event) => setIssueDate(event.target.value)} /></Field><Field label="Vencimiento"><Input type="date" value={expiryDate} onChange={(event) => setExpiryDate(event.target.value)} /></Field></div>
+        <Field label="Observaciones"><Textarea value={notes} onChange={(event) => setNotes(event.target.value)} /></Field>
+        <Button disabled={saving} className="w-full">{saving ? "Guardando..." : "Guardar cambios"}</Button>
+      </form></DialogContent></Dialog>
+
       <Dialog open={Boolean(selected)} onOpenChange={(open) => !open && setSelected(null)}><DialogContent className="max-h-[90vh] overflow-y-auto"><DialogHeader><DialogTitle>Detalle de orden {selected?.num}</DialogTitle><DialogDescription>Consulta, imprime o descarga el comprobante de la orden.</DialogDescription></DialogHeader>{selected && <div className="space-y-3 text-sm">
-        <div className="grid grid-cols-2 gap-2"><p>Estado: {badge(selected.estado)}</p><p>Vence: <strong>{formatDate(selected.fecha_vencimiento)}</strong></p><p>Operario: <strong>{selected.profiles?.full_name}</strong></p><p>Moto: <strong>{selected.vehicles?.placa}</strong></p><p>Estacion: <strong>{selected.station?.nombre || "-"}</strong></p><p>Galones suministrados: <strong>{selected.galones ?? "-"} gal</strong></p><p>Valor: <strong>{formatCurrency(selected.valor_total)}</strong></p><p>Rendimiento: <strong>{selected.rendimiento_real || "-"} km/gal</strong></p></div>
+        <div className="grid grid-cols-2 gap-2"><p>Estado: {badge(selected.estado)}</p><p>Vence: <strong>{formatDate(selected.fecha_vencimiento)}</strong></p><p>Operario: <strong>{selected.profiles?.full_name}</strong></p><p>Moto: <strong>{selected.vehicles?.placa}</strong></p><p>Estacion: <strong>{selected.station?.nombre || "-"}</strong></p><p>Galones suministrados: <strong>{formatNumber(selected.galones)} gal</strong></p><p>Valor: <strong>{formatCurrency(selected.valor_total)}</strong></p><p>Rendimiento: <strong>{formatNumber(selected.rendimiento_real)} km/gal</strong></p></div>
         {selected.gps_maps_url && <a className="flex gap-1 text-blue-500 underline" href={selected.gps_maps_url} target="_blank" rel="noreferrer"><MapPin className="w-4 h-4" /> Abrir ubicacion en Google Maps</a>}
-        {photos.length > 0 && <div className="grid grid-cols-3 gap-2">{photos.map((photo) => <a href={photo.photo_url} target="_blank" rel="noreferrer" key={photo.id}><img src={photo.photo_url} alt={photo.tipo} className="aspect-square w-full rounded-md object-cover" onError={(event) => { event.currentTarget.style.display = "none" }} /><small className="block text-center uppercase">{photo.tipo}</small></a>)}</div>}
-        <div className="flex flex-wrap gap-2 border-t pt-3"><Button variant="outline" onClick={() => printFuelOrder(selected, settings, photos)}><Printer className="w-4 h-4 mr-1" /> Imprimir</Button><Button variant="outline" onClick={() => downloadFuelOrderPdf(selected, settings).catch((error) => toast.error(error.message))}><Download className="w-4 h-4 mr-1" /> Descargar PDF</Button>{selected.estado === "pendiente" && <Button variant="outline" onClick={() => updateStatus(selected, "cerrada")}>Cerrar orden</Button>}{selected.estado === "ejecutada" && <><Button onClick={() => updateStatus(selected, "verificado")}>Verificar</Button><Button variant="destructive" onClick={() => updateStatus(selected, "observacion")}>Observacion</Button></>} {(role === "admin" || selected.estado !== "ejecutada") && <Button variant="destructive" onClick={() => deleteOrder(selected)}><Trash2 className="w-4 h-4" /></Button>}</div>
+        {photos.length > 0 && <div className="grid grid-cols-3 gap-2">{photos.map((photo) => <a href={photo.photo_url} target="_blank" rel="noreferrer" key={photo.id}><img src={photo.photo_url} alt={formatPhotoType(photo.tipo)} className="aspect-square w-full rounded-md object-cover" onError={(event) => { event.currentTarget.style.display = "none" }} /><small className="block text-center uppercase">{formatPhotoType(photo.tipo)}</small></a>)}</div>}
+        <div className="flex flex-wrap gap-2 border-t pt-3"><Button variant="outline" onClick={() => printFuelOrder(selected, settings, photos)}><Printer className="w-4 h-4 mr-1" /> Imprimir</Button><Button variant="outline" onClick={() => downloadFuelOrderPdf(selected, settings).catch((error) => toast.error(error.message))}><Download className="w-4 h-4 mr-1" /> Descargar PDF</Button>{(selected.estado === "pendiente" || selected.estado === "vencida") && <Button variant="outline" onClick={() => openEdit(selected)}><Edit className="w-4 h-4 mr-1" /> Editar</Button>}{selected.estado !== "cerrada" && <Button variant="outline" onClick={() => updateStatus(selected, "cerrada")}>Cerrar orden</Button>}{selected.estado === "ejecutada" && <><Button onClick={() => updateStatus(selected, "verificado")}>Verificar</Button><Button variant="destructive" onClick={() => updateStatus(selected, "observacion")}>Observacion</Button></>} {(role === "admin" || selected.estado !== "ejecutada") && <Button variant="destructive" onClick={() => deleteOrder(selected)}><Trash2 className="w-4 h-4" /></Button>}</div>
       </div>}</DialogContent></Dialog>
     </div>
   )

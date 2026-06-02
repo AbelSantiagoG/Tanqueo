@@ -8,7 +8,7 @@ import { useAuth } from "@/lib/auth-context"
 const navItems = {
   operario: [{ icon: Fuel, label: "Tanqueo", href: "/operario" }, { icon: ClipboardList, label: "Historial", href: "/operario/historial" }],
   despachador: [{ icon: BarChart3, label: "Panel", href: "/despachador" }, { icon: ClipboardList, label: "Ordenes", href: "/despachador/ordenes" }],
-  admin: [{ icon: BarChart3, label: "Dashboard", href: "/admin" }, { icon: ClipboardList, label: "Registros", href: "/admin/registros" }],
+  admin: [{ icon: BarChart3, label: "Resumen", href: "/admin" }, { icon: ClipboardList, label: "Registros", href: "/admin/registros" }],
 }
 
 export function MobileNav() {

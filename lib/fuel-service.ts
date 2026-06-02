@@ -30,6 +30,30 @@ export async function createFuelOrder(input: {
   return data as FuelOrder
 }
 
+export async function updateFuelOrder(input: {
+  orderId: string
+  operatorId: string
+  vehicleId: string
+  stationId: string
+  issueDate: string
+  expiryDate: string
+  notes?: string
+}) {
+  const { data, error } = await supabase
+    .rpc("update_fuel_order", {
+      p_order_id: input.orderId,
+      p_operator_id: input.operatorId,
+      p_vehicle_id: input.vehicleId,
+      p_station_id: input.stationId,
+      p_fecha_emision: input.issueDate,
+      p_fecha_vencimiento: input.expiryDate,
+      p_observaciones: input.notes || null,
+    })
+    .single()
+  if (error) throw error
+  return data as FuelOrder
+}
+
 export async function executeFuelOrder(input: {
   orderId: string
   date: string
@@ -42,6 +66,7 @@ export async function executeFuelOrder(input: {
   gps: { lat: number; lng: number; accuracy: number }
   evidence: {
     tablero: UploadedEvidence
+    nivel_tanque: UploadedEvidence
     factura: UploadedEvidence
   }
 }) {
@@ -60,6 +85,8 @@ export async function executeFuelOrder(input: {
       p_gps_precision: input.gps.accuracy,
       p_photo_tablero_url: input.evidence.tablero.url,
       p_photo_tablero_path: input.evidence.tablero.path,
+      p_photo_nivel_tanque_url: input.evidence.nivel_tanque.url,
+      p_photo_nivel_tanque_path: input.evidence.nivel_tanque.path,
       p_photo_factura_url: input.evidence.factura.url,
       p_photo_factura_path: input.evidence.factura.path,
     })

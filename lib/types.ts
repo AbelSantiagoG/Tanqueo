@@ -1,6 +1,6 @@
 export type UserRole = "operario" | "despachador" | "admin"
 export type OrderStatus = "pendiente" | "vencida" | "ejecutada" | "verificado" | "observacion" | "cerrada"
-export type PhotoType = "tablero" | "factura"
+export type PhotoType = "tablero" | "nivel_tanque" | "factura"
 
 export interface Profile {
   id: string

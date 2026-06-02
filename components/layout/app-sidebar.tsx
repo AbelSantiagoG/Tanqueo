@@ -17,7 +17,7 @@ const navItems = {
     { icon: ClipboardList, label: "Ordenes", href: "/despachador/ordenes" },
   ],
   admin: [
-    { icon: LayoutDashboard, label: "Dashboard", href: "/admin" },
+    { icon: LayoutDashboard, label: "Resumen", href: "/admin" },
     { icon: ClipboardList, label: "Registros", href: "/admin/registros" },
   ],
 }

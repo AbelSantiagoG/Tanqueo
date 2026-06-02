@@ -11,7 +11,7 @@ const cloudName = process.env.CLOUDINARY_CLOUD_NAME || ""
 const apiKey = process.env.CLOUDINARY_API_KEY || ""
 const apiSecret = process.env.CLOUDINARY_API_SECRET || ""
 const folder = (process.env.CLOUDINARY_FOLDER || "tanqueo/evidencias").replace(/^\/+|\/+$/g, "")
-const photoTypes: PhotoType[] = ["tablero", "factura"]
+const photoTypes: PhotoType[] = ["tablero", "nivel_tanque", "factura"]
 
 function cloudinaryConfig() {
   if (!supabaseUrl || !supabaseAnonKey) throw new Error("Falta la configuracion de Supabase en el servidor.")

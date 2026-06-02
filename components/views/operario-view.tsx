@@ -5,7 +5,7 @@ import { AlertTriangle, ArrowLeft, Camera, CheckCircle, ChevronRight, Clock, Dow
 import { toast } from "sonner"
 import { useAuth } from "@/lib/auth-context"
 import { executeFuelOrder, expireFuelOrders, loadFuelRecords } from "@/lib/fuel-service"
-import { FUEL_LEVELS, formatCurrency, formatDate, todayIso } from "@/lib/fuel-utils"
+import { FUEL_LEVELS, formatCurrency, formatDate, formatNumber, todayIso } from "@/lib/fuel-utils"
 import { downloadFuelOrderPdf, printFuelOrder } from "@/lib/order-print"
 import { hasStationSchema } from "@/lib/schema-capabilities"
 import { removeEvidence, uploadEvidence } from "@/lib/storage"
@@ -26,10 +26,11 @@ type PhotoState = Record<PhotoType, string | null>
 
 const PHOTO_LABELS: Record<PhotoType, string> = {
   tablero: "Tablero",
+  nivel_tanque: "Nivel del tanque",
   factura: "Factura",
 }
 
-const EMPTY_PHOTOS: PhotoState = { tablero: null, factura: null }
+const EMPTY_PHOTOS: PhotoState = { tablero: null, nivel_tanque: null, factura: null }
 
 export function OperarioView() {
   const { user } = useAuth()
@@ -52,8 +53,14 @@ export function OperarioView() {
   const [isSaving, setIsSaving] = useState(false)
   const [stationSchemaReady, setStationSchemaReady] = useState(true)
   const userId = user?.id
-  const fileRefs = {
+  const cameraRefs = {
     tablero: useRef<HTMLInputElement>(null),
+    nivel_tanque: useRef<HTMLInputElement>(null),
+    factura: useRef<HTMLInputElement>(null),
+  }
+  const galleryRefs = {
+    tablero: useRef<HTMLInputElement>(null),
+    nivel_tanque: useRef<HTMLInputElement>(null),
     factura: useRef<HTMLInputElement>(null),
   }
 
@@ -166,7 +173,7 @@ export function OperarioView() {
     if (previousRecord && Number(mileage) <= previousRecord.kilometraje_actual) return `El kilometraje debe superar ${previousRecord.kilometraje_actual} km.`
     if (!gps) return "Captura la ubicacion GPS."
     if (fuelLevelIndex === null) return "Selecciona el nivel final del tanque."
-    if (Object.values(photos).some((photo) => !photo)) return "Carga las fotos del tablero y de la factura."
+    if (Object.values(photos).some((photo) => !photo)) return "Carga las fotos del tablero, nivel del tanque y factura."
     return null
   }
 
@@ -187,6 +194,8 @@ export function OperarioView() {
     try {
       const tablero = await uploadEvidence(selectedOrder.id, "tablero", photos.tablero!)
       uploaded.push(tablero)
+      const nivelTanque = await uploadEvidence(selectedOrder.id, "nivel_tanque", photos.nivel_tanque!)
+      uploaded.push(nivelTanque)
       const factura = await uploadEvidence(selectedOrder.id, "factura", photos.factura!)
       uploaded.push(factura)
       toast.loading("Guardando tanqueo y actualizando orden...", { id: toastId })
@@ -200,7 +209,7 @@ export function OperarioView() {
         fuelLevelPercentage: FUEL_LEVELS[fuelLevelIndex].val,
         notes,
         gps,
-        evidence: { tablero, factura },
+        evidence: { tablero, nivel_tanque: nivelTanque, factura },
       })
       const executedOrder: FuelOrder = {
         ...selectedOrder,
@@ -216,6 +225,7 @@ export function OperarioView() {
       }
       const storedPhotos = [
         { id: tablero.path, order_id: selectedOrder.id, record_id: record.id, tipo: "tablero", photo_url: tablero.url, storage_path: tablero.path },
+        { id: nivelTanque.path, order_id: selectedOrder.id, record_id: record.id, tipo: "nivel_tanque", photo_url: nivelTanque.url, storage_path: nivelTanque.path },
         { id: factura.path, order_id: selectedOrder.id, record_id: record.id, tipo: "factura", photo_url: factura.url, storage_path: factura.path },
       ] as OrderPhoto[]
       setReceipt({ record, order: executedOrder, photos: storedPhotos })
@@ -263,7 +273,7 @@ export function OperarioView() {
             <CardContent className="p-0">
               {!recentRecords.length ? <p className="p-8 text-center text-muted-foreground">Aun no hay tanqueos registrados.</p> : recentRecords.map((record) => (
                 <div key={record.id} className="flex items-center justify-between border-t p-4">
-                  <div><strong>{record.vehicles?.placa}</strong><p className="text-xs text-muted-foreground">{formatDate(record.fecha)} | {record.galones} gal | {formatCurrency(record.valor_total)}</p></div>
+                  <div><strong>{record.vehicles?.placa}</strong><p className="text-xs text-muted-foreground">{formatDate(record.fecha)} | {formatNumber(record.galones)} gal | {formatCurrency(record.valor_total)}</p></div>
                   <Button variant="outline" size="icon" onClick={() => printRecord(record)}><Printer className="w-4 h-4" /></Button>
                 </div>
               ))}
@@ -274,7 +284,7 @@ export function OperarioView() {
         <Card>
           <CardHeader className="border-b"><CardTitle className="flex items-center gap-2"><Button variant="ghost" size="icon" onClick={() => setSelectedOrder(null)}><ArrowLeft className="w-4 h-4" /></Button> Registrar tanqueo | {selectedOrder.num}</CardTitle></CardHeader>
           <CardContent className="space-y-5 pt-5">
-            <div className="grid grid-cols-3 gap-2 rounded-lg bg-blue-500/10 p-3 text-center text-sm"><div>Moto<strong className="block">{selectedOrder.vehicles?.placa}</strong></div><div>Estacion<strong className="block">{selectedOrder.station?.nombre || "-"}</strong></div><div>Rendimiento esperado<strong className="block">{expectedYield} km/gal</strong></div></div>
+            <div className="grid grid-cols-3 gap-2 rounded-lg bg-blue-500/10 p-3 text-center text-sm"><div>Moto<strong className="block">{selectedOrder.vehicles?.placa}</strong></div><div>Estacion<strong className="block">{selectedOrder.station?.nombre || "-"}</strong></div><div>Rendimiento esperado<strong className="block">{formatNumber(expectedYield)} km/gal</strong></div></div>
             <div className="grid sm:grid-cols-2 gap-4">
               <Field label="Fecha"><Input type="date" value={date} onChange={(event) => setDate(event.target.value)} /></Field>
               <Field label="Kilometraje actual"><Input type="number" value={mileage} onChange={(event) => setMileage(event.target.value)} /></Field>
@@ -282,12 +292,17 @@ export function OperarioView() {
               <Field label="Valor total de la factura"><Input type="number" value={invoiceValue} onChange={(event) => setInvoiceValue(event.target.value)} placeholder="Ingresa el valor pagado" /></Field>
             </div>
             <Field label="Observaciones"><Textarea value={notes} onChange={(event) => setNotes(event.target.value)} /></Field>
-            <div className="rounded-lg border p-3 text-sm"><Gauge className="inline w-4 h-4 mr-1" /> Alcance estimado: <strong>{projectedRange} km</strong> | Rendimiento real: <strong>{calculatedYield ?? "sin historial previo"}{calculatedYield ? " km/gal" : ""}</strong></div>
+            <div className="rounded-lg border p-3 text-sm"><Gauge className="inline w-4 h-4 mr-1" /> Alcance estimado: <strong>{formatNumber(projectedRange)} km</strong> | Rendimiento real: <strong>{calculatedYield === null ? "sin historial previo" : `${formatNumber(calculatedYield)} km/gal`}</strong></div>
             <div className="space-y-2"><Label>GPS</Label><div className="flex gap-2"><Input readOnly value={gps ? `${gps.lat.toFixed(6)}, ${gps.lng.toFixed(6)} (+/- ${Math.round(gps.accuracy)} m)` : gpsStatus === "searching" ? "Buscando ubicacion..." : gpsStatus === "error" ? "Error de ubicacion" : "Sin ubicacion"} /><Button type="button" variant="outline" onClick={captureGps} disabled={gpsStatus === "searching"}><MapPin className="w-4 h-4 mr-1" /> Capturar</Button></div></div>
-            <div className="space-y-2"><Label>Evidencias fotograficas</Label><div className="grid grid-cols-2 gap-3">{(Object.keys(photos) as PhotoType[]).map((type) => (
-              <div key={type}>
-                <input ref={fileRefs[type]} type="file" accept="image/*" capture="environment" className="hidden" onChange={(event) => readPhoto(type, event.target.files?.[0])} />
-                {photos[type] ? <div className="relative aspect-square overflow-hidden rounded-lg border"><img src={photos[type]!} alt={PHOTO_LABELS[type]} className="w-full h-full object-cover" /><button type="button" onClick={() => setPhotos((value) => ({ ...value, [type]: null }))} className="absolute right-1 top-1 rounded-full bg-red-600 p-1 text-white"><X className="w-3 h-3" /></button></div> : <button type="button" onClick={() => fileRefs[type].current?.click()} className="aspect-square w-full rounded-lg border-2 border-dashed flex flex-col items-center justify-center text-xs"><Upload className="w-5 h-5 mb-1" />{PHOTO_LABELS[type]}</button>}
+            <div className="space-y-2"><Label>Evidencias fotograficas</Label><div className="grid gap-3 sm:grid-cols-3">{(Object.keys(photos) as PhotoType[]).map((type) => (
+              <div key={type} className="space-y-2 rounded-lg border p-2">
+                <input ref={cameraRefs[type]} type="file" accept="image/*" capture="environment" className="hidden" onChange={(event) => readPhoto(type, event.target.files?.[0])} />
+                <input ref={galleryRefs[type]} type="file" accept="image/*" className="hidden" onChange={(event) => readPhoto(type, event.target.files?.[0])} />
+                {photos[type] ? <div className="relative aspect-square overflow-hidden rounded-lg border"><img src={photos[type]!} alt={PHOTO_LABELS[type]} className="w-full h-full object-cover" /><button type="button" onClick={() => setPhotos((value) => ({ ...value, [type]: null }))} className="absolute right-1 top-1 rounded-full bg-red-600 p-1 text-white"><X className="w-3 h-3" /></button></div> : <div className="flex aspect-square items-center justify-center rounded-lg border-2 border-dashed text-center text-xs text-muted-foreground">{PHOTO_LABELS[type]}</div>}
+                <div className="grid grid-cols-2 gap-1">
+                  <Button type="button" size="sm" variant="outline" className="h-auto px-1 py-2 text-[10px]" onClick={() => cameraRefs[type].current?.click()}><Camera className="mr-1 h-3 w-3" /> Tomar foto</Button>
+                  <Button type="button" size="sm" variant="outline" className="h-auto px-1 py-2 text-[10px]" onClick={() => galleryRefs[type].current?.click()}><Upload className="mr-1 h-3 w-3" /> Subir imagen</Button>
+                </div>
               </div>
             ))}</div></div>
             <div className="space-y-2">
@@ -303,8 +318,8 @@ export function OperarioView() {
         </Card>
       )}
 
-      <Dialog open={showReview} onOpenChange={setShowReview}><DialogContent><DialogHeader><DialogTitle>Revision del tanqueo</DialogTitle><DialogDescription>Verifica los datos antes de confirmar el registro.</DialogDescription></DialogHeader><div className="space-y-2 text-sm"><p>Orden: <strong>{selectedOrder?.num}</strong></p><p>Estacion: <strong>{selectedOrder?.station?.nombre || "-"}</strong></p><p>KM: <strong>{Number(mileage).toLocaleString("es-CO")}</strong></p><p>Galones: <strong>{gallons}</strong></p><p>Factura: <strong>{formatCurrency(Number(invoiceValue))}</strong></p><p>Nivel: <strong>{fuelLevelIndex !== null ? FUEL_LEVELS[fuelLevelIndex].label : ""}</strong></p><p className="text-emerald-600"><Camera className="inline w-4 h-4 mr-1" /> Dos evidencias listas y GPS capturado.</p>{calculatedYield !== null && calculatedYield < expectedYield * (1 - (settings?.alert_pct || 20) / 100) && <p className="text-red-600"><AlertTriangle className="inline w-4 h-4 mr-1" /> Se generara alerta por bajo rendimiento.</p>}<div className="flex gap-2 pt-3"><Button variant="outline" onClick={() => setShowReview(false)} className="flex-1">Corregir</Button><Button onClick={confirm} disabled={isSaving} className="flex-1 bg-emerald-600">{isSaving ? "Guardando..." : "Confirmar"}</Button></div></div></DialogContent></Dialog>
-      <Dialog open={Boolean(receipt)} onOpenChange={(open) => !open && setReceipt(null)}><DialogContent><DialogHeader><DialogTitle className="text-emerald-600">Tanqueo registrado</DialogTitle><DialogDescription>El tanqueo fue guardado correctamente y el comprobante esta disponible.</DialogDescription></DialogHeader>{receipt && <div className="space-y-3 text-sm"><p>La orden <strong>{receipt.order.num}</strong> quedo ejecutada correctamente.</p><p>{receipt.record.galones} gal | {formatCurrency(receipt.record.valor_total)} | alcance {receipt.record.alcance_estimado} km</p><div className="flex flex-wrap gap-2"><Button onClick={() => printFuelOrder(receipt.order, settings, receipt.photos)}><Printer className="w-4 h-4 mr-1" /> Imprimir</Button><Button variant="outline" onClick={() => downloadFuelOrderPdf(receipt.order, settings).catch((error) => toast.error(error.message))}><Download className="w-4 h-4 mr-1" /> Descargar PDF</Button><Button variant="outline" onClick={() => setReceipt(null)}>Cerrar</Button></div></div>}</DialogContent></Dialog>
+      <Dialog open={showReview} onOpenChange={setShowReview}><DialogContent><DialogHeader><DialogTitle>Revision del tanqueo</DialogTitle><DialogDescription>Verifica los datos antes de confirmar el registro.</DialogDescription></DialogHeader><div className="space-y-2 text-sm"><p>Orden: <strong>{selectedOrder?.num}</strong></p><p>Estacion: <strong>{selectedOrder?.station?.nombre || "-"}</strong></p><p>KM: <strong>{formatNumber(Number(mileage))}</strong></p><p>Galones: <strong>{formatNumber(Number(gallons))}</strong></p><p>Factura: <strong>{formatCurrency(Number(invoiceValue))}</strong></p><p>Nivel: <strong>{fuelLevelIndex !== null ? FUEL_LEVELS[fuelLevelIndex].label : ""}</strong></p><p className="text-emerald-600"><Camera className="inline w-4 h-4 mr-1" /> Tres evidencias listas y GPS capturado.</p>{calculatedYield !== null && calculatedYield < expectedYield * (1 - (settings?.alert_pct || 20) / 100) && <p className="text-red-600"><AlertTriangle className="inline w-4 h-4 mr-1" /> Se generara alerta por bajo rendimiento.</p>}<div className="flex gap-2 pt-3"><Button variant="outline" onClick={() => setShowReview(false)} className="flex-1">Corregir</Button><Button onClick={confirm} disabled={isSaving} className="flex-1 bg-emerald-600">{isSaving ? "Guardando..." : "Confirmar"}</Button></div></div></DialogContent></Dialog>
+      <Dialog open={Boolean(receipt)} onOpenChange={(open) => !open && setReceipt(null)}><DialogContent><DialogHeader><DialogTitle className="text-emerald-600">Tanqueo registrado</DialogTitle><DialogDescription>El tanqueo fue guardado correctamente y el comprobante esta disponible.</DialogDescription></DialogHeader>{receipt && <div className="space-y-3 text-sm"><p>La orden <strong>{receipt.order.num}</strong> quedo ejecutada correctamente.</p><p>{formatNumber(receipt.record.galones)} gal | {formatCurrency(receipt.record.valor_total)} | alcance {formatNumber(receipt.record.alcance_estimado)} km</p><div className="flex flex-wrap gap-2"><Button onClick={() => printFuelOrder(receipt.order, settings, receipt.photos)}><Printer className="w-4 h-4 mr-1" /> Imprimir</Button><Button variant="outline" onClick={() => downloadFuelOrderPdf(receipt.order, settings).catch((error) => toast.error(error.message))}><Download className="w-4 h-4 mr-1" /> Descargar PDF</Button><Button variant="outline" onClick={() => setReceipt(null)}>Cerrar</Button></div></div>}</DialogContent></Dialog>
     </div>
   )
 }

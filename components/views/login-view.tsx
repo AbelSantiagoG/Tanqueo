@@ -1,6 +1,6 @@
 "use client"
 
-import { useEffect, useState } from "react"
+import { useEffect, useMemo, useState } from "react"
 import { useRouter } from "next/navigation"
 import { Lock, Mail, Shield, Truck, User, ArrowLeft } from "lucide-react"
 import { supabase } from "@/lib/supabase"
@@ -24,17 +24,32 @@ export function LoginView() {
   const [password, setPassword] = useState("")
   const [errorMsg, setErrorMsg] = useState("")
   const [isLoading, setIsLoading] = useState(false)
+  const [profilesLoading, setProfilesLoading] = useState(false)
+  const [profilesLoaded, setProfilesLoaded] = useState(false)
 
   useEffect(() => {
-    supabase.rpc("get_login_profiles").then(({ data, error }) => {
-      if (error) {
-        console.error(error)
-        setErrorMsg("Aplica la migracion de Supabase para habilitar el acceso por perfiles.")
-      } else {
-        setProfiles((data || []) as LoginProfile[])
+    if (!role || role === "admin" || profilesLoaded || profilesLoading) return
+    let cancelled = false
+    setProfilesLoading(true)
+    void (async () => {
+      try {
+        const { data, error } = await supabase.rpc("get_login_profiles")
+        if (cancelled) return
+        if (error) {
+          console.error(error)
+          setErrorMsg("Aplica la migracion de Supabase para habilitar el acceso por perfiles.")
+        } else {
+          setProfiles((data || []) as LoginProfile[])
+        }
+        setProfilesLoaded(true)
+      } finally {
+        if (!cancelled) setProfilesLoading(false)
       }
-    })
-  }, [])
+    })()
+    return () => {
+      cancelled = true
+    }
+  }, [profilesLoaded, profilesLoading, role])
 
   const reset = () => {
     setRole(null)
@@ -70,13 +85,13 @@ export function LoginView() {
     }
   }
 
-  const roleProfiles = profiles.filter((profile) => profile.role === role)
+  const roleProfiles = useMemo(() => profiles.filter((profile) => profile.role === role), [profiles, role])
 
   return (
     <main className="min-h-screen flex items-center justify-center bg-gradient-to-br from-slate-950 via-blue-950 to-blue-700 p-4">
       <Card className="min-w-0 w-full max-w-md overflow-hidden bg-white text-slate-900 border-0 shadow-2xl">
         <CardHeader className="min-w-0 text-center">
-          <CompanyLogo className="mx-auto h-24 w-full rounded-lg bg-white px-2" />
+          <CompanyLogo className="mx-auto h-24 w-full" />
           <CardTitle className="mt-3 text-lg font-black uppercase sm:text-xl">Control de Tanqueo</CardTitle>
           <p className="text-xs text-slate-500">Selecciona tu perfil para ingresar</p>
         </CardHeader>
@@ -104,7 +119,7 @@ export function LoginView() {
                 <div className="space-y-2">
                   <Label className="text-slate-700">Selecciona tu usuario</Label>
                   <div className="max-h-40 overflow-y-auto space-y-1 rounded-lg bg-slate-100 p-2 border">
-                    {roleProfiles.length ? roleProfiles.map((profile) => (
+                    {profilesLoading ? <p className="p-2 text-center text-xs text-slate-500">Cargando usuarios...</p> : roleProfiles.length ? roleProfiles.map((profile) => (
                       <button
                         type="button"
                         key={profile.id}

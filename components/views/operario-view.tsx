@@ -11,6 +11,7 @@ import { downloadFuelOrderPdf, printFuelOrder } from "@/lib/order-print"
 import { hasStationSchema } from "@/lib/schema-capabilities"
 import { removeEvidence, uploadEvidence } from "@/lib/storage"
 import { supabase } from "@/lib/supabase"
+import { ORDER_SELECT_WITH_STATION, ORDER_SELECT_WITHOUT_STATION, PHOTO_SELECT, SETTINGS_SELECT } from "@/lib/supabase-selects"
 import type { CompanySettings, FuelOrder, FuelRecord, OrderPhoto, PhotoType, UploadedEvidence } from "@/lib/types"
 import { Badge } from "@/components/ui/badge"
 import { Button } from "@/components/ui/button"
@@ -71,15 +72,16 @@ export function OperarioView() {
       const hasStations = await hasStationSchema()
       setStationSchemaReady(hasStations)
       await expireFuelOrders()
-      const orderSelect: string = hasStations ? "*, vehicles(*), station:station_id(*), profiles:operator_id(*), despachador:despachador_id(*)" : "*, vehicles(*), profiles:operator_id(*), despachador:despachador_id(*)"
+      const orderSelect = hasStations ? ORDER_SELECT_WITH_STATION : ORDER_SELECT_WITHOUT_STATION
       const [settingsResult, ordersResult, recordsResult] = await Promise.all([
-        supabase.from("company_settings").select("*").limit(1).maybeSingle(),
+        supabase.from("company_settings").select(SETTINGS_SELECT).limit(1).maybeSingle(),
         supabase
           .from("fuel_orders")
           .select(orderSelect)
           .eq("operator_id", userId)
+          .in("estado", ["pendiente", "vencida"])
           .order("created_at", { ascending: false }),
-        loadFuelRecords(userId, { stationSchemaReady: hasStations }),
+        loadFuelRecords(userId, { stationSchemaReady: hasStations, limit: 5 }),
       ])
       if (settingsResult.error) throw settingsResult.error
       if (ordersResult.error) throw ordersResult.error
@@ -96,8 +98,8 @@ export function OperarioView() {
     loadData()
   }, [loadData])
 
-  const activeOrders = orders.filter((order) => order.estado === "pendiente" || order.estado === "vencida")
-  const recentRecords = records.slice(0, 5)
+  const activeOrders = useMemo(() => orders.filter((order) => order.estado === "pendiente" || order.estado === "vencida"), [orders])
+  const recentRecords = records
   const expectedYield = selectedOrder?.vehicles?.rendimiento_esperado || selectedOrder?.rendimiento_esperado || 50
   const projectedRange = Number(gallons) > 0 ? Math.round(Number(gallons) * expectedYield) : 0
   const calculatedYield = useMemo(() => {
@@ -120,7 +122,7 @@ export function OperarioView() {
     setGpsStatus("idle")
     const { data, error } = await supabase
       .from("fuel_records")
-      .select("*")
+      .select("id, galones, kilometraje_actual, created_at")
       .eq("vehicle_id", order.vehicle_id)
       .order("created_at", { ascending: false })
       .limit(1)
@@ -193,12 +195,12 @@ export function OperarioView() {
     const toastId = toast.loading("Subiendo evidencias...")
     const uploaded: UploadedEvidence[] = []
     try {
-      const tablero = await uploadEvidence(selectedOrder.id, "tablero", photos.tablero!)
-      uploaded.push(tablero)
-      const nivelTanque = await uploadEvidence(selectedOrder.id, "nivel_tanque", photos.nivel_tanque!)
-      uploaded.push(nivelTanque)
-      const factura = await uploadEvidence(selectedOrder.id, "factura", photos.factura!)
-      uploaded.push(factura)
+      const [tablero, nivelTanque, factura] = await Promise.all([
+        uploadEvidence(selectedOrder.id, "tablero", photos.tablero!),
+        uploadEvidence(selectedOrder.id, "nivel_tanque", photos.nivel_tanque!),
+        uploadEvidence(selectedOrder.id, "factura", photos.factura!),
+      ])
+      uploaded.push(tablero, nivelTanque, factura)
       toast.loading("Guardando tanqueo y actualizando orden...", { id: toastId })
       const record = await executeFuelOrder({
         orderId: selectedOrder.id,
@@ -231,7 +233,15 @@ export function OperarioView() {
       ] as OrderPhoto[]
       setReceipt({ record, order: executedOrder, photos: storedPhotos })
       setSelectedOrder(null)
-      await loadData()
+      setOrders((current) => current.filter((order) => order.id !== selectedOrder.id))
+      setRecords((current) => [{
+        ...record,
+        fuel_orders: executedOrder,
+        profiles: selectedOrder.profiles,
+        vehicles: selectedOrder.vehicles,
+        despachador: selectedOrder.despachador,
+        station: selectedOrder.station,
+      } as FuelRecord, ...current].slice(0, 5))
       toast.success("Tanqueo registrado y orden ejecutada.", { id: toastId })
       notifyOrderStatus(selectedOrder.id)
         .then((result) => toast.success(result.message))
@@ -248,7 +258,7 @@ export function OperarioView() {
   const printRecord = async (record: FuelRecord) => {
     const order = orders.find((item) => item.id === record.order_id) || record.fuel_orders
     if (!order) return toast.error("No se encontro la orden asociada.")
-    const { data } = await supabase.from("order_photos").select("*").eq("order_id", record.order_id)
+    const { data } = await supabase.from("order_photos").select(PHOTO_SELECT).eq("order_id", record.order_id)
     printFuelOrder({ ...order, estado: "ejecutada", ...record }, settings, (data || []) as OrderPhoto[])
   }
 

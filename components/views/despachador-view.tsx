@@ -10,6 +10,7 @@ import { notifyOrderStatus } from "@/lib/notifications"
 import { downloadFuelOrderPdf, printFuelOrder } from "@/lib/order-print"
 import { hasStationSchema } from "@/lib/schema-capabilities"
 import { supabase } from "@/lib/supabase"
+import { ORDER_SELECT_WITH_STATION, ORDER_SELECT_WITHOUT_STATION, PHOTO_SELECT, SETTINGS_SELECT, STATION_SELECT, VEHICLE_SELECT } from "@/lib/supabase-selects"
 import type { CompanySettings, FuelOrder, OrderPhoto, Profile, ServiceStation, Vehicle } from "@/lib/types"
 import { Badge } from "@/components/ui/badge"
 import { Button } from "@/components/ui/button"
@@ -21,6 +22,8 @@ import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs"
 import { Textarea } from "@/components/ui/textarea"
 import { SchemaUpdateAlert } from "@/components/ui/schema-update-alert"
+
+const ORDERS_PAGE_SIZE = 200
 
 export function DespachadorView({ embedded = false }: { embedded?: boolean }) {
   const { role } = useAuth()
@@ -44,19 +47,21 @@ export function DespachadorView({ embedded = false }: { embedded?: boolean }) {
   const [expiryDate, setExpiryDate] = useState(todayIso())
   const [notes, setNotes] = useState("")
   const [stationSchemaReady, setStationSchemaReady] = useState(true)
+  const [loading, setLoading] = useState(true)
 
   const load = useCallback(async () => {
+    setLoading(true)
     try {
       const hasStations = await hasStationSchema()
       setStationSchemaReady(hasStations)
       await expireFuelOrders()
-      const orderSelect: string = hasStations ? "*, vehicles(*), station:station_id(*), profiles:operator_id(*), despachador:despachador_id(*)" : "*, vehicles(*), profiles:operator_id(*), despachador:despachador_id(*)"
+      const orderSelect = hasStations ? ORDER_SELECT_WITH_STATION : ORDER_SELECT_WITHOUT_STATION
       const [settingsResult, profilesResult, vehiclesResult, stationsResult, ordersResult] = await Promise.all([
-        supabase.from("company_settings").select("*").limit(1).maybeSingle(),
-        supabase.from("profiles").select("*").eq("role", "operario").eq("activo", true).order("full_name"),
-        supabase.from("vehicles").select("*, profiles:operario_asignado_id(*)").eq("activo", true).order("placa"),
-        hasStations ? supabase.from("service_stations").select("*").eq("activo", true).order("nombre") : Promise.resolve({ data: [], error: null }),
-        supabase.from("fuel_orders").select(orderSelect).order("created_at", { ascending: false }),
+        supabase.from("company_settings").select(SETTINGS_SELECT).limit(1).maybeSingle(),
+        supabase.from("profiles").select("id, full_name, role, activo").eq("role", "operario").eq("activo", true).order("full_name"),
+        supabase.from("vehicles").select(VEHICLE_SELECT).eq("activo", true).order("placa"),
+        hasStations ? supabase.from("service_stations").select(STATION_SELECT).eq("activo", true).order("nombre") : Promise.resolve({ data: [], error: null }),
+        supabase.from("fuel_orders").select(orderSelect).order("created_at", { ascending: false }).limit(ORDERS_PAGE_SIZE),
       ])
       if (settingsResult.error) throw settingsResult.error
       if (profilesResult.error) throw profilesResult.error
@@ -64,13 +69,15 @@ export function DespachadorView({ embedded = false }: { embedded?: boolean }) {
       if (stationsResult.error) throw stationsResult.error
       if (ordersResult.error) throw ordersResult.error
       setSettings(settingsResult.data as CompanySettings | null)
-      setOperators((profilesResult.data || []) as Profile[])
-      setVehicles((vehiclesResult.data || []) as Vehicle[])
-      setStations((stationsResult.data || []) as ServiceStation[])
+      setOperators((profilesResult.data || []) as unknown as Profile[])
+      setVehicles((vehiclesResult.data || []) as unknown as Vehicle[])
+      setStations((stationsResult.data || []) as unknown as ServiceStation[])
       setOrders((ordersResult.data || []) as unknown as FuelOrder[])
     } catch (error: any) {
       console.error(error)
       toast.error(error.message || "No fue posible cargar ordenes y flota.")
+    } finally {
+      setLoading(false)
     }
   }, [])
 
@@ -129,7 +136,21 @@ export function DespachadorView({ embedded = false }: { embedded?: boolean }) {
       toast.success(`Orden ${order.num} actualizada correctamente.`)
       setShowEdit(false)
       setEditingOrder(null)
-      await load()
+      const nextOperator = operators.find((item) => item.id === operatorId)
+      const nextVehicle = vehicles.find((item) => item.id === vehicleId)
+      const nextStation = stations.find((item) => item.id === stationId)
+      setOrders((current) => current.map((item) => item.id === editingOrder.id ? {
+        ...item,
+        operator_id: operatorId,
+        vehicle_id: vehicleId,
+        station_id: stationId,
+        fecha_emision: issueDate,
+        fecha_vencimiento: expiryDate,
+        observaciones: notes || null,
+        profiles: nextOperator,
+        vehicles: nextVehicle,
+        station: nextStation,
+      } as FuelOrder : item))
     } catch (error: any) {
       console.error(error)
       toast.error(error.message || "No se pudo actualizar la orden.")
@@ -140,7 +161,8 @@ export function DespachadorView({ embedded = false }: { embedded?: boolean }) {
 
   const openDetail = async (order: FuelOrder) => {
     setSelected(order)
-    const { data, error } = await supabase.from("order_photos").select("*").eq("order_id", order.id)
+    setPhotos([])
+    const { data, error } = await supabase.from("order_photos").select(PHOTO_SELECT).eq("order_id", order.id)
     if (error) console.error(error)
     setPhotos((data || []) as OrderPhoto[])
   }
@@ -156,7 +178,7 @@ export function DespachadorView({ embedded = false }: { embedded?: boolean }) {
         .catch((error) => toast.warning(error.message || "La orden se cerro, pero no se pudo notificar al administrador."))
     }
     setSelected(null)
-    await load()
+    setOrders((current) => current.map((item) => item.id === order.id ? { ...item, estado } : item))
   }
 
   const deleteOrder = async (order: FuelOrder) => {
@@ -165,8 +187,13 @@ export function DespachadorView({ embedded = false }: { embedded?: boolean }) {
     if (error) return toast.error(error.message)
     toast.success("Orden eliminada.")
     setSelected(null)
-    await load()
+    setOrders((current) => current.filter((item) => item.id !== order.id))
   }
+
+  const statusCounts = useMemo(() => orders.reduce<Record<string, number>>((acc, order) => {
+    acc[order.estado] = (acc[order.estado] || 0) + 1
+    return acc
+  }, {}), [orders])
 
   const filteredOrders = useMemo(() => orders.filter((order) => {
     const term = search.toLowerCase()
@@ -187,7 +214,7 @@ export function DespachadorView({ embedded = false }: { embedded?: boolean }) {
         <TabsList><TabsTrigger value="ordenes">Ordenes</TabsTrigger><TabsTrigger value="flota">Flota</TabsTrigger></TabsList>
         <TabsContent value="ordenes" className="space-y-4">
           <div className="grid grid-cols-2 md:grid-cols-4 gap-3">
-            {(["pendiente", "ejecutada", "vencida", "cerrada"] as const).map((status) => <Card key={status}><CardContent className="p-4"><p className="text-xs capitalize text-muted-foreground">{status}</p><p className="text-2xl font-bold">{orders.filter((order) => order.estado === status).length}</p></CardContent></Card>)}
+            {(["pendiente", "ejecutada", "vencida", "cerrada"] as const).map((status) => <Card key={status}><CardContent className="p-4"><p className="text-xs capitalize text-muted-foreground">{status}</p><p className="text-2xl font-bold">{statusCounts[status] || 0}</p></CardContent></Card>)}
           </div>
           <Card>
             <CardHeader className="gap-3 md:flex-row md:items-center md:justify-between">
@@ -200,7 +227,7 @@ export function DespachadorView({ embedded = false }: { embedded?: boolean }) {
               </div>
             </CardHeader>
             <CardContent className="p-0">
-              {!filteredOrders.length ? <p className="p-8 text-center text-sm text-muted-foreground">Sin ordenes para mostrar.</p> : <>
+              {loading ? <p className="p-8 text-center text-sm text-muted-foreground">Cargando ordenes...</p> : !filteredOrders.length ? <p className="p-8 text-center text-sm text-muted-foreground">Sin ordenes para mostrar.</p> : <>
                 <div className="space-y-3 p-3 md:hidden">
                   {filteredOrders.map((order) => <button type="button" key={order.id} onClick={() => openDetail(order)} className="w-full rounded-lg border bg-card p-3 text-left shadow-sm transition-colors hover:bg-muted/40">
                     <div className="flex items-start justify-between gap-3"><div><strong className="font-mono text-sm">{order.num}</strong><p className="mt-1 text-xs text-muted-foreground">{order.vehicles?.placa} | vence {formatDate(order.fecha_vencimiento)}</p></div>{badge(order.estado)}</div>

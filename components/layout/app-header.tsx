@@ -80,7 +80,7 @@ export function AppHeader({ onMenuToggle }: AppHeaderProps) {
             <Menu className="w-5 h-5" />
           </Button>
           <div className="hidden lg:flex items-center gap-3">
-            <CompanyLogo className="h-11 w-32 rounded-md bg-white px-1" />
+            <CompanyLogo className="h-11 w-32" />
             <div>
               <h1 className="font-bold text-foreground">Control de Tanqueo</h1>
               <p className="text-xs text-muted-foreground">Sistema de Gestión</p>
@@ -88,7 +88,7 @@ export function AppHeader({ onMenuToggle }: AppHeaderProps) {
           </div>
           {/* Mobile logo */}
           <div className="lg:hidden flex items-center gap-2">
-            <CompanyLogo className="h-9 w-20 rounded bg-white px-1 sm:w-24" />
+            <CompanyLogo className="h-9 w-20 sm:w-24" />
           </div>
         </div>
 

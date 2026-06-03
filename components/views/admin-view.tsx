@@ -9,6 +9,7 @@ import { loadFuelRecords } from "@/lib/fuel-service"
 import { BRAND_YIELDS, VEHICLE_BRANDS, formatCurrency, formatNumber, formatOrderStatus, formatRole } from "@/lib/fuel-utils"
 import { hasStationSchema } from "@/lib/schema-capabilities"
 import { supabase } from "@/lib/supabase"
+import { PROFILE_SELECT, SETTINGS_SELECT, STATION_SELECT, VEHICLE_SELECT } from "@/lib/supabase-selects"
 import type { CompanySettings, FuelOrder, FuelRecord, Profile, ServiceStation, UserRole, Vehicle } from "@/lib/types"
 import { Badge } from "@/components/ui/badge"
 import { Button } from "@/components/ui/button"
@@ -22,6 +23,7 @@ import { Textarea } from "@/components/ui/textarea"
 import { SchemaUpdateAlert } from "@/components/ui/schema-update-alert"
 
 const CHART_COLORS = ["#1a56db", "#0ea768", "#d97706", "#7c3aed", "#e53e3e", "#06b6d4"]
+const DASHBOARD_RECORD_LIMIT = 500
 const DespachadorView = dynamic(() => import("@/components/views/despachador-view").then((module) => module.DespachadorView), { loading: () => <p className="p-4 text-sm text-muted-foreground">Cargando ordenes...</p> })
 const RecordsView = dynamic(() => import("@/components/views/records-view").then((module) => module.RecordsView), { loading: () => <p className="p-4 text-sm text-muted-foreground">Cargando registros...</p> })
 
@@ -58,36 +60,65 @@ export function AdminView() {
   const [showStation, setShowStation] = useState(false)
   const [newPin, setNewPin] = useState("")
   const [stationSchemaReady, setStationSchemaReady] = useState(true)
+  const [activeTab, setActiveTab] = useState("dashboard")
+  const [loadingBase, setLoadingBase] = useState(true)
+  const [loadingDashboard, setLoadingDashboard] = useState(false)
+  const [dashboardLoaded, setDashboardLoaded] = useState(false)
 
-  const load = useCallback(async () => {
+  const loadBase = useCallback(async () => {
+    setLoadingBase(true)
     try {
       const hasStations = await hasStationSchema()
       setStationSchemaReady(hasStations)
-      const orderSelect: string = hasStations ? "*, vehicles(*), station:station_id(*), profiles:operator_id(*), despachador:despachador_id(*)" : "*, vehicles(*), profiles:operator_id(*), despachador:despachador_id(*)"
-      const [settingsResult, stationsResult, vehiclesResult, profilesResult, ordersResult, recordsResult] = await Promise.all([
-        supabase.from("company_settings").select("*").limit(1).maybeSingle(),
-        hasStations ? supabase.from("service_stations").select("*").order("nombre") : Promise.resolve({ data: [], error: null }),
-        supabase.from("vehicles").select("*, profiles:operario_asignado_id(*)").order("placa"),
-        supabase.from("profiles").select("*").order("full_name"),
-        supabase.from("fuel_orders").select(orderSelect).order("created_at", { ascending: false }),
-        loadFuelRecords(undefined, { stationSchemaReady: hasStations }),
+      const [settingsResult, stationsResult, vehiclesResult, profilesResult, ordersResult] = await Promise.all([
+        supabase.from("company_settings").select(SETTINGS_SELECT).limit(1).maybeSingle(),
+        hasStations ? supabase.from("service_stations").select(STATION_SELECT).order("nombre") : Promise.resolve({ data: [], error: null }),
+        supabase.from("vehicles").select(VEHICLE_SELECT).order("placa"),
+        supabase.from("profiles").select(PROFILE_SELECT).order("full_name"),
+        supabase.from("fuel_orders").select("id, estado").order("created_at", { ascending: false }),
       ])
       for (const result of [settingsResult, stationsResult, vehiclesResult, profilesResult, ordersResult]) if (result.error) throw result.error
       if (settingsResult.data) setSettings(settingsResult.data as CompanySettings)
-      setStations((stationsResult.data || []) as ServiceStation[])
-      setVehicles((vehiclesResult.data || []) as Vehicle[])
-      setProfiles((profilesResult.data || []) as Profile[])
+      setStations((stationsResult.data || []) as unknown as ServiceStation[])
+      setVehicles((vehiclesResult.data || []) as unknown as Vehicle[])
+      setProfiles((profilesResult.data || []) as unknown as Profile[])
       setOrders((ordersResult.data || []) as unknown as FuelOrder[])
-      setRecords(recordsResult)
     } catch (error: any) {
       console.error(error)
       toast.error(error.message || "No fue posible cargar el panel administrativo.")
+    } finally {
+      setLoadingBase(false)
     }
   }, [])
 
   useEffect(() => {
-    load()
-  }, [load])
+    loadBase()
+  }, [loadBase])
+
+  const loadDashboard = useCallback(async (force = false) => {
+    if (dashboardLoaded && !force) return
+    setLoadingDashboard(true)
+    try {
+      const hasStations = await hasStationSchema()
+      setStationSchemaReady(hasStations)
+      setRecords(await loadFuelRecords(undefined, { stationSchemaReady: hasStations, limit: DASHBOARD_RECORD_LIMIT }))
+      setDashboardLoaded(true)
+    } catch (error: any) {
+      console.error(error)
+      toast.error(error.message || "No fue posible cargar el dashboard.")
+    } finally {
+      setLoadingDashboard(false)
+    }
+  }, [dashboardLoaded])
+
+  useEffect(() => {
+    if (activeTab === "dashboard") void loadDashboard()
+  }, [activeTab, loadDashboard])
+
+  const refreshBase = useCallback(async () => {
+    setDashboardLoaded(false)
+    await loadBase()
+  }, [loadBase])
 
   const metrics = useMemo(() => {
     const gallons = records.reduce((sum, record) => sum + record.galones, 0)
@@ -116,7 +147,7 @@ export function AdminView() {
       setNewPin("")
     }
     toast.success("Configuracion actualizada.")
-    await load()
+    await refreshBase()
   }
 
   const saveVehicle = async (event: React.FormEvent) => {
@@ -132,7 +163,7 @@ export function AdminView() {
     if (result.error) return toast.error(result.error.message)
     toast.success("Moto guardada.")
     setShowVehicle(false)
-    await load()
+    await refreshBase()
   }
 
   const deleteVehicle = async (vehicle: Vehicle) => {
@@ -140,7 +171,7 @@ export function AdminView() {
     const { error } = await supabase.from("vehicles").delete().eq("id", vehicle.id)
     if (error) return toast.error(error.message)
     toast.success("Moto eliminada.")
-    await load()
+    await refreshBase()
   }
 
   const saveStation = async (event: React.FormEvent) => {
@@ -160,7 +191,7 @@ export function AdminView() {
     if (result.error) return toast.error(result.error.message)
     toast.success("Estacion guardada.")
     setShowStation(false)
-    await load()
+    await refreshBase()
   }
 
   const deleteStation = async (station: ServiceStation) => {
@@ -168,7 +199,7 @@ export function AdminView() {
     const { error } = await supabase.from("service_stations").delete().eq("id", station.id)
     if (error) return toast.error(error.message)
     toast.success("Estacion eliminada.")
-    await load()
+    await refreshBase()
   }
 
   const saveProfile = async (event: React.FormEvent) => {
@@ -190,7 +221,7 @@ export function AdminView() {
     }
     toast.success("Personal guardado.")
     setShowProfile(false)
-    await load()
+    await refreshBase()
   }
 
   const deleteProfile = async (profile: Profile) => {
@@ -200,18 +231,20 @@ export function AdminView() {
     const body = await response.json()
     if (!response.ok) return toast.error(body.error)
     toast.success("Cuenta eliminada.")
-    await load()
+    await refreshBase()
   }
 
   return (
     <div className="space-y-5">
       <div><h2 className="text-xl font-black sm:text-2xl">Administracion general</h2><p className="text-sm text-muted-foreground">Control integral de tanqueo y flota</p></div>
       {!stationSchemaReady && <SchemaUpdateAlert />}
-      <Tabs defaultValue="dashboard">
+      {loadingBase && <p className="rounded-md bg-muted p-3 text-sm text-muted-foreground">Cargando datos base...</p>}
+      <Tabs value={activeTab} onValueChange={setActiveTab}>
         <TabsList className="w-full">
           <TabsTrigger value="dashboard">Resumen</TabsTrigger><TabsTrigger value="ordenes">Ordenes</TabsTrigger><TabsTrigger value="registros">Registros</TabsTrigger><TabsTrigger value="flota">Flota</TabsTrigger><TabsTrigger value="estaciones">Estaciones</TabsTrigger><TabsTrigger value="personal">Personal</TabsTrigger><TabsTrigger value="config">Configuracion</TabsTrigger>
         </TabsList>
         <TabsContent value="dashboard" className="space-y-4">
+          {loadingDashboard && <p className="rounded-md bg-muted p-3 text-sm text-muted-foreground">Cargando indicadores...</p>}
           <div className="grid grid-cols-2 md:grid-cols-4 xl:grid-cols-8 gap-3">
             <Metric label="Registros" value={records.length} icon={<ClipboardList />} /><Metric label="Galones totales" value={formatNumber(metrics.gallons)} icon={<Fuel />} /><Metric label="Gasto total" value={`$${formatNumber(metrics.value / 1_000_000)} M`} icon={<DollarSign />} /><Metric label="Motos activas" value={vehicles.filter((item) => item.activo !== false).length} icon={<Car />} /><Metric label="Estaciones activas" value={stations.filter((item) => item.activo).length} icon={<Building2 />} /><Metric label="Prom. gal/registro" value={formatNumber(metrics.average)} icon={<BarChart3 />} /><Metric label="Alertas" value={metrics.alerts} icon={<AlertTriangle />} /><Metric label="Ordenes pendientes" value={metrics.pending} icon={<ClipboardList />} />
           </div>

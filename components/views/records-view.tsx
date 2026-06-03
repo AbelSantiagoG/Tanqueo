@@ -10,6 +10,7 @@ import { downloadFuelOrderPdf, printFuelOrder } from "@/lib/order-print"
 import { removeEvidence } from "@/lib/storage"
 import { supabase } from "@/lib/supabase"
 import { hasStationSchema } from "@/lib/schema-capabilities"
+import { PHOTO_SELECT, SETTINGS_SELECT } from "@/lib/supabase-selects"
 import type { CompanySettings, FuelOrder, FuelRecord, OrderPhoto } from "@/lib/types"
 import { Badge } from "@/components/ui/badge"
 import { Button } from "@/components/ui/button"
@@ -18,6 +19,8 @@ import { Dialog, DialogContent, DialogDescription, DialogHeader, DialogTitle } f
 import { Input } from "@/components/ui/input"
 import { SchemaUpdateAlert } from "@/components/ui/schema-update-alert"
 
+const RECORDS_PAGE_SIZE = 150
+
 export function RecordsView({ operatorId, allowDelete = false, embedded = false }: { operatorId?: string; allowDelete?: boolean; embedded?: boolean }) {
   const [records, setRecords] = useState<FuelRecord[]>([])
   const [settings, setSettings] = useState<CompanySettings | null>(null)
@@ -25,14 +28,17 @@ export function RecordsView({ operatorId, allowDelete = false, embedded = false 
   const [search, setSearch] = useState("")
   const [exporting, setExporting] = useState(false)
   const [stationSchemaReady, setStationSchemaReady] = useState(true)
+  const [loading, setLoading] = useState(true)
+  const [limit, setLimit] = useState(RECORDS_PAGE_SIZE)
 
   const load = useCallback(async () => {
+    setLoading(true)
     try {
       const hasStations = await hasStationSchema()
       setStationSchemaReady(hasStations)
       const [loadedRecords, settingsResult] = await Promise.all([
-        loadFuelRecords(operatorId, { stationSchemaReady: hasStations }),
-        supabase.from("company_settings").select("*").limit(1).maybeSingle(),
+        loadFuelRecords(operatorId, { stationSchemaReady: hasStations, limit }),
+        supabase.from("company_settings").select(SETTINGS_SELECT).limit(1).maybeSingle(),
       ])
       if (settingsResult.error) throw settingsResult.error
       setRecords(loadedRecords)
@@ -40,8 +46,10 @@ export function RecordsView({ operatorId, allowDelete = false, embedded = false 
     } catch (error: any) {
       console.error(error)
       toast.error(error.message || "No fue posible cargar los registros.")
+    } finally {
+      setLoading(false)
     }
-  }, [operatorId])
+  }, [limit, operatorId])
 
   useEffect(() => {
     load()
@@ -76,7 +84,7 @@ export function RecordsView({ operatorId, allowDelete = false, embedded = false 
   }
 
   const openDetail = async (record: FuelRecord) => {
-    const { data, error } = await supabase.from("order_photos").select("*").eq("order_id", record.order_id)
+    const { data, error } = await supabase.from("order_photos").select(PHOTO_SELECT).eq("order_id", record.order_id)
     if (error) return toast.error(error.message)
     setSelected({ ...record, order_photos: (data || []) as OrderPhoto[] })
   }
@@ -153,7 +161,7 @@ export function RecordsView({ operatorId, allowDelete = false, embedded = false 
         </div>
       </CardHeader>
       <CardContent className="p-0">
-        {!filtered.length ? <p className="p-8 text-center text-sm text-muted-foreground">No hay registros para mostrar.</p> : <>
+        {loading ? <p className="p-8 text-center text-sm text-muted-foreground">Cargando registros...</p> : !filtered.length ? <p className="p-8 text-center text-sm text-muted-foreground">No hay registros para mostrar.</p> : <>
           <div className="space-y-3 p-3 md:hidden">
             {filtered.map((record) => <button type="button" key={record.id} onClick={() => openDetail(record)} className="w-full rounded-lg border bg-card p-3 text-left shadow-sm transition-colors hover:bg-muted/40">
               <div className="flex items-start justify-between gap-3"><div><strong className="font-mono text-sm">{record.fuel_orders?.num}</strong><p className="mt-1 text-xs text-muted-foreground">{formatDate(record.fecha)} | {record.vehicles?.placa}</p></div><Eye className="h-4 w-4 shrink-0 text-muted-foreground" /></div>
@@ -167,6 +175,7 @@ export function RecordsView({ operatorId, allowDelete = false, embedded = false 
               {filtered.map((record) => <tr key={record.id} className="border-t"><td className="p-3 font-mono">{record.fuel_orders?.num}</td><td className="p-3">{formatDate(record.fecha)}</td><td className="p-3">{record.profiles?.full_name}</td><td className="p-3">{record.vehicles?.placa}</td><td className="p-3">{record.station?.nombre || "-"}</td><td className="p-3">{formatNumber(record.galones)}</td><td className="p-3">{formatCurrency(record.valor_total)}</td><td className="p-3">{formatNumber(record.rendimiento_real)} {record.alerta_rendimiento && <Badge variant="destructive">alerta</Badge>}</td><td className="p-3"><Button variant="ghost" size="icon" onClick={() => openDetail(record)}><Eye className="w-4 h-4" /></Button></td></tr>)}
             </tbody></table>
           </div>
+          {records.length >= limit && <div className="border-t p-3 text-center"><Button variant="outline" onClick={() => setLimit((value) => value + RECORDS_PAGE_SIZE)}>Cargar mas registros</Button></div>}
         </>}
       </CardContent>
 

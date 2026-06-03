@@ -46,6 +46,16 @@ supabase/migrations/202606020001_order_edits_tank_photo.sql
 
 Este script es adicional. No reemplaza ni modifica `202606010001_full_fuel_control.sql`.
 
+## Actualizacion incremental del 3 de junio de 2026
+
+Para acelerar listados, dashboard, ordenes e historial, ejecuta solamente:
+
+```text
+supabase/migrations/202606030001_performance_indexes.sql
+```
+
+Este script solo agrega indices idempotentes. No cambia tablas, datos, RLS ni funciones existentes.
+
 ## Aviso automatico al cerrar o ejecutar una orden
 
 La aplicacion intenta avisar al administrador en este orden: WhatsApp, correo y SMS. Las credenciales son privadas del servidor. Agrega solo los canales que vayas a usar:

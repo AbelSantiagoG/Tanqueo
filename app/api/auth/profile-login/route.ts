@@ -1,5 +1,6 @@
 import { NextRequest, NextResponse } from "next/server"
 import { createClient } from "@supabase/supabase-js"
+import { PROFILE_SELECT } from "@/lib/supabase-selects"
 
 const url = process.env.NEXT_PUBLIC_SUPABASE_URL || ""
 const anonKey = process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY || ""
@@ -16,7 +17,7 @@ export async function POST(request: NextRequest) {
     const admin = createClient(url, serviceRoleKey, { auth: { persistSession: false } })
     const { data: profile, error: profileError } = await admin
       .from("profiles")
-      .select("id, email, role, activo")
+      .select(PROFILE_SELECT)
       .eq("id", body.profileId)
       .single()
     if (profileError || !profile?.email || profile.activo === false || !["operario", "despachador"].includes(profile.role)) {
@@ -33,6 +34,7 @@ export async function POST(request: NextRequest) {
         access_token: data.session.access_token,
         refresh_token: data.session.refresh_token,
       },
+      profile,
     })
   } catch (error: any) {
     return NextResponse.json({ error: error.message || "No fue posible iniciar sesion." }, { status: 400 })

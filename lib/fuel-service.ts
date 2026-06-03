@@ -1,10 +1,25 @@
 import { supabase } from "@/lib/supabase"
 import type { FuelOrder, FuelRecord, UploadedEvidence } from "@/lib/types"
 import { hasStationSchema, STATION_SCHEMA_MESSAGE } from "@/lib/schema-capabilities"
+import { fuelRecordSelect } from "@/lib/supabase-selects"
 
-export async function expireFuelOrders() {
-  const { error } = await supabase.rpc("expire_fuel_orders")
-  if (error) throw error
+let expireFuelOrdersPromise: Promise<void> | null = null
+let expireFuelOrdersUntil = 0
+
+export async function expireFuelOrders(options: { force?: boolean } = {}) {
+  const now = Date.now()
+  if (!options.force && now < expireFuelOrdersUntil) return
+  if (!expireFuelOrdersPromise) {
+    expireFuelOrdersPromise = (async () => {
+      const { error } = await supabase.rpc("expire_fuel_orders")
+        if (error) throw error
+        expireFuelOrdersUntil = Date.now() + 60_000
+    })()
+      .finally(() => {
+        expireFuelOrdersPromise = null
+      })
+  }
+  await expireFuelOrdersPromise
 }
 
 export async function createFuelOrder(input: {
@@ -95,16 +110,14 @@ export async function executeFuelOrder(input: {
   return data as FuelRecord
 }
 
-export async function loadFuelRecords(operatorId?: string, options: { includePhotos?: boolean; stationSchemaReady?: boolean } = {}) {
+export async function loadFuelRecords(operatorId?: string, options: { includePhotos?: boolean; stationSchemaReady?: boolean; limit?: number } = {}) {
   const stationSchemaReady = options.stationSchemaReady ?? await hasStationSchema()
-  const stationSelect = stationSchemaReady ? ", fuel_orders(*, station:station_id(*)), station:station_id(*)" : ", fuel_orders(*)"
-  const photosSelect = options.includePhotos ? ", order_photos(*)" : ""
-  const recordSelect: string = `*${stationSelect}, profiles:operator_id(*), vehicles(*), despachador:despachador_id(*)${photosSelect}`
   let query = supabase
     .from("fuel_records")
-    .select(recordSelect)
+    .select(fuelRecordSelect(stationSchemaReady, options.includePhotos))
     .order("created_at", { ascending: false })
   if (operatorId) query = query.eq("operator_id", operatorId)
+  if (options.limit) query = query.limit(options.limit)
   const { data, error } = await query
   if (error) throw error
   return (data || []) as unknown as FuelRecord[]

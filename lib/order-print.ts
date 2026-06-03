@@ -28,7 +28,7 @@ function waitForImages(root: ParentNode) {
 function buildFuelOrderDocument(order: FuelOrder, settings?: CompanySettings | null) {
   const status = effectiveOrderStatus(order)
   const station = order.station
-  const companyLogo = new URL("/asucap-logo.png", window.location.origin).href
+  const companyLogo = new URL("/asucap-logo-transparent.png", window.location.origin).href
   const stationLogo = station?.logo_url
     ? `<img src="${escapeHtml(station.logo_url)}" alt="Logo estacion" style="display:block;height:45px;max-width:130px;margin:0 0 4px auto;object-fit:contain">`
     : `<div style="display:flex;width:45px;height:45px;margin:0 0 4px auto;align-items:center;justify-content:center;border:2px solid #0ea768;border-radius:8px;background:#e6f7ef;color:#0a7c4d;font-size:21px">&#9981;</div>`

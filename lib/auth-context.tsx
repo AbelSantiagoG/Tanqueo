@@ -2,6 +2,7 @@
 
 import React, { createContext, useContext, useEffect, useState } from "react"
 import { supabase } from "@/lib/supabase"
+import { PROFILE_SELECT } from "@/lib/supabase-selects"
 import type { Profile, UserRole } from "@/lib/types"
 
 interface AuthContextType {
@@ -17,7 +18,7 @@ interface AuthContextType {
 const AuthContext = createContext<AuthContextType | undefined>(undefined)
 
 async function loadProfile(userId: string) {
-  const { data, error } = await supabase.from("profiles").select("*").eq("id", userId).single()
+  const { data, error } = await supabase.from("profiles").select(PROFILE_SELECT).eq("id", userId).single()
   if (error || !data) throw new Error("Tu cuenta no tiene un perfil activo en el sistema.")
   if (data.activo === false) throw new Error("Tu perfil esta inactivo. Contacta al administrador.")
   return data as Profile
@@ -76,7 +77,7 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
 
     const { data, error } = await supabase.auth.setSession(body.session)
     if (error || !data.user) throw error || new Error("Supabase no devolvio un usuario autenticado.")
-    const profile = await loadProfile(data.user.id)
+    const profile = (body.profile as Profile | undefined) || await loadProfile(data.user.id)
     if (profile.id !== profileId) {
       await supabase.auth.signOut()
       throw new Error("Las credenciales no corresponden al perfil seleccionado.")

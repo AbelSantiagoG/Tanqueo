@@ -2,8 +2,7 @@
 
 import { useEffect, useMemo, useState } from "react"
 import { useRouter } from "next/navigation"
-import { Lock, Mail, Shield, Truck, User, ArrowLeft } from "lucide-react"
-import { supabase } from "@/lib/supabase"
+import { Lock, Mail, Shield, Truck, User, ArrowLeft, Loader2, Search } from "lucide-react"
 import { useAuth } from "@/lib/auth-context"
 import type { Profile, UserRole } from "@/lib/types"
 import { Button } from "@/components/ui/button"
@@ -25,31 +24,49 @@ export function LoginView() {
   const [errorMsg, setErrorMsg] = useState("")
   const [isLoading, setIsLoading] = useState(false)
   const [profilesLoading, setProfilesLoading] = useState(false)
-  const [profilesLoaded, setProfilesLoaded] = useState(false)
+  const [profilesError, setProfilesError] = useState("")
+  const [profileSearch, setProfileSearch] = useState("")
+  const [profilesRetry, setProfilesRetry] = useState(0)
+  const [hasMoreProfiles, setHasMoreProfiles] = useState(false)
 
   useEffect(() => {
-    if (!role || role === "admin" || profilesLoaded || profilesLoading) return
+    if (!role || role === "admin") return
     let cancelled = false
+    const controller = new AbortController()
     setProfilesLoading(true)
+    setProfilesError("")
     void (async () => {
+      await new Promise((resolve) => window.setTimeout(resolve, profileSearch ? 250 : 0))
+      if (cancelled) return
+      const timeout = window.setTimeout(() => controller.abort(), 12000)
       try {
-        const { data, error } = await supabase.rpc("get_login_profiles")
+        const params = new URLSearchParams({ role, limit: "50" })
+        if (profileSearch.trim()) params.set("search", profileSearch.trim())
+        const response = await fetch(`/api/auth/login-profiles?${params.toString()}`, {
+          cache: "no-store",
+          signal: controller.signal,
+        })
+        const body = await response.json()
         if (cancelled) return
-        if (error) {
-          console.error(error)
-          setErrorMsg("Aplica la migracion de Supabase para habilitar el acceso por perfiles.")
-        } else {
-          setProfiles((data || []) as LoginProfile[])
-        }
-        setProfilesLoaded(true)
+        if (!response.ok) throw new Error(body.error || "No fue posible cargar usuarios.")
+        setProfiles((body.profiles || []) as LoginProfile[])
+        setHasMoreProfiles(Boolean(body.hasMore))
+      } catch (error: any) {
+        if (cancelled) return
+        console.error(error)
+        setProfiles([])
+        setHasMoreProfiles(false)
+        setProfilesError(error.name === "AbortError" ? "La carga de usuarios tardo demasiado. Intenta buscar por nombre o reintenta." : error.message || "No fue posible cargar usuarios.")
       } finally {
+        window.clearTimeout(timeout)
         if (!cancelled) setProfilesLoading(false)
       }
     })()
     return () => {
       cancelled = true
+      controller.abort()
     }
-  }, [profilesLoaded, profilesLoading, role])
+  }, [profileSearch, profilesRetry, role])
 
   const reset = () => {
     setRole(null)
@@ -57,11 +74,20 @@ export function LoginView() {
     setEmail("")
     setPassword("")
     setErrorMsg("")
+    setProfiles([])
+    setProfilesError("")
+    setProfileSearch("")
+    setHasMoreProfiles(false)
   }
 
   const selectRole = (selectedRole: UserRole) => {
     router.prefetch(`/${selectedRole}`)
     setRole(selectedRole)
+    setSelected(null)
+    setProfiles([])
+    setProfilesError("")
+    setProfileSearch("")
+    setHasMoreProfiles(false)
   }
 
   const submit = async (event: React.FormEvent) => {
@@ -118,18 +144,46 @@ export function LoginView() {
               {role !== "admin" && (
                 <div className="space-y-2">
                   <Label className="text-slate-700">Selecciona tu usuario</Label>
-                  <div className="max-h-40 overflow-y-auto space-y-1 rounded-lg bg-slate-100 p-2 border">
-                    {profilesLoading ? <p className="p-2 text-center text-xs text-slate-500">Cargando usuarios...</p> : roleProfiles.length ? roleProfiles.map((profile) => (
-                      <button
-                        type="button"
-                        key={profile.id}
-                        onClick={() => setSelected(profile)}
-                        className={`w-full rounded-md p-2 text-left text-sm ${selected?.id === profile.id ? "bg-blue-700 text-white" : "hover:bg-white"}`}
-                      >
-                        <strong>{profile.full_name}</strong>
-                        {profile.cargo && <span className="block text-xs opacity-75">{profile.cargo}</span>}
-                      </button>
-                    )) : <p className="p-2 text-center text-xs text-slate-500">No hay usuarios registrados para este perfil.</p>}
+                  <div className="rounded-xl border border-slate-200 bg-slate-50 p-2 shadow-inner">
+                    <div className="relative">
+                      <Search className="absolute left-3 top-3 h-4 w-4 text-slate-400" />
+                      <Input
+                        value={profileSearch}
+                        onChange={(event) => {
+                          setSelected(null)
+                          setProfileSearch(event.target.value)
+                        }}
+                        placeholder="Buscar por nombre"
+                        className="bg-white pl-9"
+                      />
+                    </div>
+                    <div className="mt-2 max-h-56 space-y-1 overflow-y-auto pr-1">
+                      {profilesLoading ? (
+                        <div className="flex items-center justify-center gap-2 rounded-lg bg-white p-4 text-xs text-slate-500">
+                          <Loader2 className="h-4 w-4 animate-spin" /> Cargando usuarios...
+                        </div>
+                      ) : profilesError ? (
+                        <div className="space-y-2 rounded-lg bg-red-50 p-3 text-center text-xs text-red-700">
+                          <p>{profilesError}</p>
+                          <Button type="button" size="sm" variant="outline" className="h-8 bg-white text-slate-700" onClick={() => setProfilesRetry((value) => value + 1)}>Reintentar</Button>
+                        </div>
+                      ) : roleProfiles.length ? roleProfiles.map((profile) => (
+                        <button
+                          type="button"
+                          key={profile.id}
+                          onClick={() => setSelected(profile)}
+                          className={`w-full rounded-lg border p-3 text-left text-sm transition-colors ${selected?.id === profile.id ? "border-blue-700 bg-blue-700 text-white shadow-sm" : "border-transparent bg-white hover:border-blue-200 hover:bg-blue-50"}`}
+                        >
+                          <strong>{profile.full_name}</strong>
+                          {profile.cargo && <span className="block text-xs opacity-75">{profile.cargo}</span>}
+                        </button>
+                      )) : (
+                        <p className="rounded-lg bg-white p-4 text-center text-xs text-slate-500">{profileSearch ? "No se encontraron usuarios con esa busqueda." : "No hay usuarios registrados para este perfil."}</p>
+                      )}
+                    </div>
+                    {hasMoreProfiles && !profilesLoading && !profilesError && (
+                      <p className="px-1 pt-2 text-[11px] text-slate-500">Mostrando los primeros 50 usuarios. Usa la busqueda para encontrar otro perfil.</p>
+                    )}
                   </div>
                 </div>
               )}

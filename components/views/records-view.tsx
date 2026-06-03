@@ -112,31 +112,38 @@ export function RecordsView({ operatorId, allowDelete = false, embedded = false 
       const columns: Array<[string, string, number]> = [
         ["Numero orden", "order", 18], ["Fecha", "date", 13], ["Operario", "operator", 24],
         ["Cedula", "cedula", 16], ["Moto placa", "plate", 14], ["Marca", "brand", 14], ["Modelo", "model", 16], ["Estacion", "station", 24],
-        ["Kilometros", "mileage", 14], ["Galones", "gallons", 12], ["Valor COP", "value", 16], ["Nivel tanque", "level", 18],
+        ["Kilometros", "mileage", 14], ["Galones", "gallons", 12], ["Valor tanqueo COP", "invoiceValue", 18], ["Nivel tanque", "level", 18],
         ["Rendimiento real", "realYield", 18], ["Rendimiento esperado", "expectedYield", 22], ["Alcance estimado", "range", 18],
         ["Alerta rendimiento", "alert", 18], ["Despachador", "dispatcher", 22], ["Observaciones", "notes", 30],
         ["Latitud", "lat", 15], ["Longitud", "lng", 15], ["Precision GPS", "accuracy", 15], ["Mapa", "maps", 42],
         ["Foto tablero", "dashboard", 48], ["Foto nivel del tanque", "tankLevelPhoto", 48], ["Foto factura", "invoice", 48], ["Fecha y hora", "timestamp", 22],
       ]
       sheet.columns = columns.map(([header, key, width]) => ({ header, key, width }))
-      for (const key of ["mileage", "gallons", "value", "realYield", "expectedYield", "range"]) sheet.getColumn(key).numFmt = "#,##0.##"
+      for (const key of ["mileage", "gallons", "realYield", "expectedYield", "range"]) sheet.getColumn(key).numFmt = "#,##0.##"
+      sheet.getColumn("invoiceValue").numFmt = '"$"#,##0 "COP"'
       sheet.getRow(1).eachCell((cell) => {
         cell.font = { bold: true, color: { argb: "FFFFFFFF" } }
         cell.fill = { type: "pattern", pattern: "solid", fgColor: { argb: "FF1A56DB" } }
       })
+      let totalGallons = 0
+      let totalValue = 0
       filtered.forEach((record) => {
         const photos = photosByOrder.get(record.order_id) || {}
+        totalGallons += record.galones || 0
+        totalValue += record.valor_total || 0
         sheet.addRow({
           order: record.fuel_orders?.num, date: record.fecha, operator: record.profiles?.full_name,
           cedula: record.profiles?.cedula, plate: record.vehicles?.placa, brand: record.vehicles?.marca, model: record.vehicles?.modelo,
           station: record.station?.nombre,
-          mileage: record.kilometraje_actual, gallons: record.galones, value: record.valor_total, level: record.nivel_tanque,
+          mileage: record.kilometraje_actual, gallons: record.galones, invoiceValue: record.valor_total, level: record.nivel_tanque,
           realYield: record.rendimiento_real ?? "-", expectedYield: record.rendimiento_esperado, range: record.alcance_estimado,
           alert: record.alerta_rendimiento ? "ALERTA" : "OK", dispatcher: record.despachador?.full_name, notes: record.observaciones,
           lat: record.gps_lat, lng: record.gps_lng, accuracy: record.gps_precision, maps: record.gps_maps_url,
           dashboard: photos.tablero, tankLevelPhoto: photos.nivel_tanque, invoice: photos.factura, timestamp: record.created_at,
         })
       })
+      const totalRow = sheet.addRow({ order: "TOTAL", gallons: totalGallons, invoiceValue: totalValue })
+      totalRow.font = { bold: true }
       sheet.views = [{ state: "frozen", ySplit: 1 }]
       const buffer = await workbook.xlsx.writeBuffer()
       saveAs(new Blob([buffer]), `tanqueos-${new Date().toISOString().split("T")[0]}.xlsx`)

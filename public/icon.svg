@@ -1,26 +1,12 @@
 <svg width="180" height="180" viewBox="0 0 180 180" fill="none" xmlns="http://www.w3.org/2000/svg">
-  <style>
-    @media (prefers-color-scheme: light) {
-      .background { fill: black; }
-      .foreground { fill: white; }
-    }
-    @media (prefers-color-scheme: dark) {
-      .background { fill: white; }
-      .foreground { fill: black; }
-    }
-  </style>
-  <g clip-path="url(#clip0_7960_43945)">
-    <rect class="background" width="180" height="180" rx="37" />
-    <g style="transform: scale(95%); transform-origin: center">
-      <path class="foreground"
-        d="M101.141 53H136.632C151.023 53 162.689 64.6662 162.689 79.0573V112.904H148.112V79.0573C148.112 78.7105 148.098 78.3662 148.072 78.0251L112.581 112.898C112.701 112.902 112.821 112.904 112.941 112.904H148.112V126.672H112.941C98.5504 126.672 86.5638 114.891 86.5638 100.5V66.7434H101.141V100.5C101.141 101.15 101.191 101.792 101.289 102.422L137.56 66.7816C137.255 66.7563 136.945 66.7434 136.632 66.7434H101.141V53Z" />
-      <path class="foreground"
-        d="M65.2926 124.136L14 66.7372H34.6355L64.7495 100.436V66.7372H80.1365V118.47C80.1365 126.278 70.4953 129.958 65.2926 124.136Z" />
-    </g>
-  </g>
-  <defs>
-    <clipPath id="clip0_7960_43945">
-      <rect width="180" height="180" fill="white" />
-    </clipPath>
-  </defs>
+  <rect width="180" height="180" rx="32" fill="#F8FAFC"/>
+  <path d="M54 64H135C142.18 64 148 69.82 148 77V142C148 149.18 142.18 155 135 155H54C46.82 155 41 149.18 41 142V77C41 69.82 46.82 64 54 64Z" fill="#DC2626"/>
+  <path d="M128 64H137C143.08 64 148 68.92 148 75V143C148 149.08 143.08 154 137 154H128V64Z" fill="#B91C1C" opacity=".55"/>
+  <path d="M72 69H125V88H85C77.82 88 72 82.18 72 75V69Z" fill="#F8FAFC"/>
+  <path d="M70 35L108 43L125 62H102L94 53L64 47L50 61L40 52L54 38C58.62 33.38 64.36 34.08 70 35Z" fill="#2F453E"/>
+  <path d="M42 50L58 63L48 77L31 64L42 50Z" fill="#1F2937"/>
+  <path d="M31 68C31 68 18 85 18 96C18 104.28 24.72 111 33 111C41.28 111 48 104.28 48 96C48 85 31 68 31 68Z" fill="#FDBA21"/>
+  <path d="M38 91C38 99.28 31.28 106 23 106C21.98 106 21 105.9 20.04 105.71C22.67 109.53 27.05 112 33 112C41.28 112 48 105.28 48 97C48 92.62 45.29 86.89 42.03 81.75C43.32 86.04 43.01 89.87 38 91Z" fill="#F97316" opacity=".45"/>
+  <path d="M69 104L91 124M91 124L114 104M91 124V151M91 124H121" stroke="#B91C1C" stroke-width="12" stroke-linecap="round" stroke-linejoin="round" opacity=".65"/>
+  <rect x="78" y="115" width="34" height="34" rx="6" fill="#DC2626" stroke="#B91C1C" stroke-width="8"/>
 </svg>

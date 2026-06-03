@@ -64,6 +64,22 @@ supabase/migrations/202606030002_dashboard_history_rpc.sql
 
 Este script agrega la RPC `get_dashboard_history()`, que calcula totales y agrupaciones directamente en Supabase.
 
+Para habilitar el borrado definitivo de usuarios desde `Personal`, ejecuta tambien:
+
+```text
+supabase/migrations/202606030003_user_delete_actions.sql
+```
+
+Este script agrega la RPC `hard_delete_profile()`. La opcion de desactivar conserva el historial; la opcion de eliminar borra la cuenta y limpia sus relaciones asociadas.
+
+Para que el dashboard historico incluya registros y galones por operario en las tablas de totales, ejecuta tambien:
+
+```text
+supabase/migrations/202606030004_dashboard_operator_totals.sql
+```
+
+Este script actualiza la RPC `get_dashboard_history()` sin modificar migraciones anteriores.
+
 ## Aviso automatico al cerrar o ejecutar una orden
 
 La aplicacion intenta avisar al administrador en este orden: WhatsApp, correo y SMS. Las credenciales son privadas del servidor. Agrega solo los canales que vayas a usar:

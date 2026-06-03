@@ -2,7 +2,7 @@
 
 import { useCallback, useEffect, useState } from "react"
 import dynamic from "next/dynamic"
-import { AlertTriangle, BarChart3, Building2, Car, ClipboardList, DollarSign, Edit, Fuel, Plus, Trash2 } from "lucide-react"
+import { AlertTriangle, BarChart3, Building2, Car, ClipboardList, DollarSign, Edit, Fuel, Plus, Trash2, UserX } from "lucide-react"
 import { Bar, BarChart, CartesianGrid, Cell, Legend, Line, LineChart, Pie, PieChart, ResponsiveContainer, Tooltip, XAxis, YAxis } from "recharts"
 import { toast } from "sonner"
 import { BRAND_YIELDS, VEHICLE_BRANDS, formatCurrency, formatNumber, formatOrderStatus, formatRole } from "@/lib/fuel-utils"
@@ -245,15 +245,39 @@ export function AdminView() {
     await refreshBase()
   }
 
-  const deleteProfile = async (profile: Profile) => {
-    if (!confirm(`Eliminar la cuenta de ${profile.full_name}?`)) return
+  const changeProfileAccess = async (profile: Profile, mode: "deactivate" | "delete") => {
     const { data } = await supabase.auth.getSession()
-    const response = await fetch(`/api/admin/users?id=${profile.id}`, { method: "DELETE", headers: { Authorization: `Bearer ${data.session?.access_token || ""}` } })
+    const params = new URLSearchParams({ id: profile.id, mode })
+    const response = await fetch(`/api/admin/users?${params.toString()}`, { method: "DELETE", headers: { Authorization: `Bearer ${data.session?.access_token || ""}` } })
     const body = await response.json()
     if (!response.ok) return toast.error(body.error)
-    toast.success("Cuenta eliminada.")
+    toast.success(mode === "delete" ? "Cuenta eliminada definitivamente." : "Cuenta desactivada.")
     await refreshBase()
   }
+
+  const deactivateProfile = async (profile: Profile) => {
+    if (!confirm(`Desactivar la cuenta de ${profile.full_name}? El usuario no podra ingresar, pero su historial se conserva.`)) return
+    await changeProfileAccess(profile, "deactivate")
+  }
+
+  const deleteProfile = async (profile: Profile) => {
+    if (!confirm(`Eliminar definitivamente la cuenta de ${profile.full_name}? Esta accion puede borrar sus ordenes, registros y evidencias asociadas.`)) return
+    await changeProfileAccess(profile, "delete")
+  }
+
+  const profileActions = (profile: Profile) => (
+    <div className="flex gap-1">
+      <Button variant="ghost" size="icon" title="Editar usuario" aria-label={`Editar ${profile.full_name}`} onClick={() => { setProfileDraft(profile); setShowProfile(true) }}>
+        <Edit className="w-4 h-4" />
+      </Button>
+      <Button variant="ghost" size="icon" title={profile.activo === false ? "Usuario inactivo" : "Desactivar usuario"} aria-label={`Desactivar ${profile.full_name}`} disabled={profile.activo === false} onClick={() => deactivateProfile(profile)}>
+        <UserX className={`w-4 h-4 ${profile.activo === false ? "text-muted-foreground" : "text-amber-600"}`} />
+      </Button>
+      <Button variant="ghost" size="icon" title="Eliminar definitivamente" aria-label={`Eliminar definitivamente ${profile.full_name}`} onClick={() => deleteProfile(profile)}>
+        <Trash2 className="w-4 h-4 text-red-500" />
+      </Button>
+    </div>
+  )
 
   return (
     <div className="space-y-5">
@@ -294,8 +318,8 @@ export function AdminView() {
         <TabsContent value="personal">
           <Section title="Operarios y despachadores" button={<Button onClick={() => { setProfileDraft(EMPTY_PROFILE); setShowProfile(true) }}><Plus className="w-4 h-4 mr-1" /> Nuevo usuario</Button>}>
             {!profiles.length ? <p className="text-sm text-muted-foreground">No hay usuarios registrados.</p> : <>
-              <div className="space-y-3 md:hidden">{profiles.map((profile) => <div key={profile.id} className="rounded-lg border p-3 shadow-sm"><div className="flex items-start justify-between gap-2"><div><p className="font-semibold">{profile.full_name}</p><Badge className="mt-1">{formatRole(profile.role)}</Badge></div><div className="flex gap-1"><Button variant="ghost" size="icon" onClick={() => { setProfileDraft(profile); setShowProfile(true) }}><Edit className="w-4 h-4" /></Button><Button variant="ghost" size="icon" onClick={() => deleteProfile(profile)}><Trash2 className="w-4 h-4 text-red-500" /></Button></div></div><div className="mt-3 grid gap-1 border-t pt-2 text-xs text-muted-foreground"><span>Cedula: {profile.cedula || "-"}</span><span>Telefono: {profile.telefono || "-"}</span><span>Zona: {profile.zona || "-"}</span></div></div>)}</div>
-              <div className="hidden overflow-x-auto md:block"><table className="w-full text-sm"><thead><tr className="text-left"><th className="p-3">Nombre</th><th className="p-3">Rol</th><th className="p-3">Cedula</th><th className="p-3">Telefono</th><th className="p-3">Zona</th><th></th></tr></thead><tbody>{profiles.map((profile) => <tr key={profile.id} className="border-t"><td className="p-3">{profile.full_name}</td><td className="p-3"><Badge>{formatRole(profile.role)}</Badge></td><td className="p-3">{profile.cedula}</td><td className="p-3">{profile.telefono}</td><td className="p-3">{profile.zona}</td><td className="p-3 flex gap-1"><Button variant="ghost" size="icon" onClick={() => { setProfileDraft(profile); setShowProfile(true) }}><Edit className="w-4 h-4" /></Button><Button variant="ghost" size="icon" onClick={() => deleteProfile(profile)}><Trash2 className="w-4 h-4 text-red-500" /></Button></td></tr>)}</tbody></table></div>
+              <div className="space-y-3 md:hidden">{profiles.map((profile) => <div key={profile.id} className="rounded-lg border p-3 shadow-sm"><div className="flex items-start justify-between gap-2"><div><p className="font-semibold">{profile.full_name}</p><div className="mt-1 flex flex-wrap gap-1"><Badge>{formatRole(profile.role)}</Badge><Badge variant={profile.activo === false ? "outline" : "secondary"}>{profile.activo === false ? "Inactivo" : "Activo"}</Badge></div></div>{profileActions(profile)}</div><div className="mt-3 grid gap-1 border-t pt-2 text-xs text-muted-foreground"><span>Cedula: {profile.cedula || "-"}</span><span>Telefono: {profile.telefono || "-"}</span><span>Zona: {profile.zona || "-"}</span></div></div>)}</div>
+              <div className="hidden overflow-x-auto md:block"><table className="w-full text-sm"><thead><tr className="text-left"><th className="p-3">Nombre</th><th className="p-3">Rol</th><th className="p-3">Estado</th><th className="p-3">Cedula</th><th className="p-3">Telefono</th><th className="p-3">Zona</th><th></th></tr></thead><tbody>{profiles.map((profile) => <tr key={profile.id} className="border-t"><td className="p-3">{profile.full_name}</td><td className="p-3"><Badge>{formatRole(profile.role)}</Badge></td><td className="p-3"><Badge variant={profile.activo === false ? "outline" : "secondary"}>{profile.activo === false ? "Inactivo" : "Activo"}</Badge></td><td className="p-3">{profile.cedula}</td><td className="p-3">{profile.telefono}</td><td className="p-3">{profile.zona}</td><td className="p-3">{profileActions(profile)}</td></tr>)}</tbody></table></div>
             </>}
           </Section>
         </TabsContent>
@@ -348,11 +372,36 @@ function Chart({ title, children, wide = false }: { title: string; children: Rea
 function SummaryTables({ byVehicle, byOperator, byBrand, orderStatus }: { byVehicle: DashboardAggregate[]; byOperator: DashboardAggregate[]; byBrand: DashboardAggregate[]; orderStatus: DashboardHistory["orderStatus"] }) {
   const states: OrderStatus[] = ["pendiente", "ejecutada", "vencida", "cerrada", "verificado", "observacion"]
   const statusCounts = new Map(orderStatus.map((item) => [item.name, item.count]))
-  return <div className="grid lg:grid-cols-2 gap-4"><SmallTable title="Resumen por moto" rows={byVehicle.map((item) => [item.name, item.count || 0, `${formatNumber(item.gallons || 0)} gal`, formatCurrency(item.value)])} /><SmallTable title="Resumen por operario" rows={byOperator.map((item) => [item.name, "-", "-", formatCurrency(item.value)])} /><SmallTable title="Rendimiento por marca" rows={byBrand.map((item) => [item.name, item.count || 0, `${formatNumber(item.gallons || 0)} gal`, item.yieldCount ? `${formatNumber((item.yield || 0) / item.yieldCount)} km/gal` : "-"])} /><SmallTable title="Estado de ordenes" rows={states.map((state) => [formatOrderStatus(state), statusCounts.get(state) || 0, "", ""])} /></div>
+  const totals = {
+    vehicles: {
+      count: byVehicle.reduce((total, item) => total + (item.count || 0), 0),
+      gallons: byVehicle.reduce((total, item) => total + (item.gallons || 0), 0),
+      value: byVehicle.reduce((total, item) => total + (item.value || 0), 0),
+    },
+    operators: {
+      count: byOperator.reduce((total, item) => total + (item.count || 0), 0),
+      gallons: byOperator.reduce((total, item) => total + (item.gallons || 0), 0),
+      value: byOperator.reduce((total, item) => total + (item.value || 0), 0),
+    },
+    brands: {
+      count: byBrand.reduce((total, item) => total + (item.count || 0), 0),
+      gallons: byBrand.reduce((total, item) => total + (item.gallons || 0), 0),
+      value: byBrand.reduce((total, item) => total + (item.value || 0), 0),
+      yield: byBrand.reduce((total, item) => total + (item.yield || 0), 0),
+      yieldCount: byBrand.reduce((total, item) => total + (item.yieldCount || 0), 0),
+    },
+    orders: states.reduce((total, state) => total + (statusCounts.get(state) || 0), 0),
+  }
+  return <div className="grid lg:grid-cols-2 gap-4">
+    <SmallTable title="Resumen por moto" headers={["Moto", "Registros", "Galones", "Total"]} rows={byVehicle.map((item) => [item.name, item.count || 0, `${formatNumber(item.gallons || 0)} gal`, formatCurrency(item.value)])} totalRow={["Total", totals.vehicles.count, `${formatNumber(totals.vehicles.gallons)} gal`, formatCurrency(totals.vehicles.value)]} />
+    <SmallTable title="Resumen por operario" headers={["Operario", "Registros", "Galones", "Total"]} rows={byOperator.map((item) => [item.name, item.count || 0, `${formatNumber(item.gallons || 0)} gal`, formatCurrency(item.value)])} totalRow={["Total", totals.operators.count, `${formatNumber(totals.operators.gallons)} gal`, formatCurrency(totals.operators.value)]} />
+    <SmallTable title="Rendimiento por marca" headers={["Marca", "Registros", "Galones", "Rendimiento", "Total"]} rows={byBrand.map((item) => [item.name, item.count || 0, `${formatNumber(item.gallons || 0)} gal`, item.yieldCount ? `${formatNumber((item.yield || 0) / item.yieldCount)} km/gal` : "-", formatCurrency(item.value)])} totalRow={["Total", totals.brands.count, `${formatNumber(totals.brands.gallons)} gal`, totals.brands.yieldCount ? `${formatNumber(totals.brands.yield / totals.brands.yieldCount)} km/gal` : "-", formatCurrency(totals.brands.value)]} />
+    <SmallTable title="Estado de ordenes" headers={["Estado", "Total"]} rows={states.map((state) => [formatOrderStatus(state), statusCounts.get(state) || 0])} totalRow={["Total", totals.orders]} />
+  </div>
 }
 
-function SmallTable({ title, rows }: { title: string; rows: Array<Array<string | number>> }) {
-  return <Card><CardHeader><CardTitle className="text-sm">{title}</CardTitle></CardHeader><CardContent className="overflow-x-auto"><table className="w-full text-xs"><tbody>{rows.length ? rows.map((row, index) => <tr key={`${row[0]}-${index}`} className="border-t">{row.map((cell, cellIndex) => <td className="p-2" key={cellIndex}>{cell}</td>)}</tr>) : <tr><td className="p-4 text-muted-foreground">Sin datos</td></tr>}</tbody></table></CardContent></Card>
+function SmallTable({ title, headers, rows, totalRow }: { title: string; headers: string[]; rows: Array<Array<string | number>>; totalRow: Array<string | number> }) {
+  return <Card><CardHeader><CardTitle className="text-sm">{title}</CardTitle></CardHeader><CardContent className="overflow-x-auto"><table className="w-full text-xs"><thead><tr className="border-t text-left">{headers.map((header, index) => <th className="p-2 font-semibold text-muted-foreground" key={`${title}-${header}-${index}`}>{header}</th>)}</tr></thead><tbody>{rows.length ? rows.map((row, index) => <tr key={`${row[0]}-${index}`} className="border-t">{row.map((cell, cellIndex) => <td className="p-2" key={cellIndex}>{cell}</td>)}</tr>) : <tr><td className="p-4 text-muted-foreground" colSpan={headers.length}>Sin datos</td></tr>}</tbody><tfoot><tr className="border-t font-bold">{totalRow.map((cell, index) => <td className="p-2" key={index}>{cell}</td>)}</tr></tfoot></table></CardContent></Card>
 }
 
 function Section({ title, button, children }: { title: string; button: React.ReactNode; children: React.ReactNode }) {

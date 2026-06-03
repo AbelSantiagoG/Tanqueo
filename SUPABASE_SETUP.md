@@ -56,6 +56,14 @@ supabase/migrations/202606030001_performance_indexes.sql
 
 Este script solo agrega indices idempotentes. No cambia tablas, datos, RLS ni funciones existentes.
 
+Para que el dashboard muestre historicos exactos sin descargar todos los registros al navegador, ejecuta tambien:
+
+```text
+supabase/migrations/202606030002_dashboard_history_rpc.sql
+```
+
+Este script agrega la RPC `get_dashboard_history()`, que calcula totales y agrupaciones directamente en Supabase.
+
 ## Aviso automatico al cerrar o ejecutar una orden
 
 La aplicacion intenta avisar al administrador en este orden: WhatsApp, correo y SMS. Las credenciales son privadas del servidor. Agrega solo los canales que vayas a usar:

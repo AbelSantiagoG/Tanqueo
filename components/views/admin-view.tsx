@@ -1,16 +1,15 @@
 "use client"
 
-import { useCallback, useEffect, useMemo, useState } from "react"
+import { useCallback, useEffect, useState } from "react"
 import dynamic from "next/dynamic"
 import { AlertTriangle, BarChart3, Building2, Car, ClipboardList, DollarSign, Edit, Fuel, Plus, Trash2 } from "lucide-react"
 import { Bar, BarChart, CartesianGrid, Cell, Legend, Line, LineChart, Pie, PieChart, ResponsiveContainer, Tooltip, XAxis, YAxis } from "recharts"
 import { toast } from "sonner"
-import { loadFuelRecords } from "@/lib/fuel-service"
 import { BRAND_YIELDS, VEHICLE_BRANDS, formatCurrency, formatNumber, formatOrderStatus, formatRole } from "@/lib/fuel-utils"
 import { hasStationSchema } from "@/lib/schema-capabilities"
 import { supabase } from "@/lib/supabase"
 import { PROFILE_SELECT, SETTINGS_SELECT, STATION_SELECT, VEHICLE_SELECT } from "@/lib/supabase-selects"
-import type { CompanySettings, FuelOrder, FuelRecord, Profile, ServiceStation, UserRole, Vehicle } from "@/lib/types"
+import type { CompanySettings, OrderStatus, Profile, ServiceStation, UserRole, Vehicle } from "@/lib/types"
 import { Badge } from "@/components/ui/badge"
 import { Button } from "@/components/ui/button"
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card"
@@ -23,9 +22,42 @@ import { Textarea } from "@/components/ui/textarea"
 import { SchemaUpdateAlert } from "@/components/ui/schema-update-alert"
 
 const CHART_COLORS = ["#1a56db", "#0ea768", "#d97706", "#7c3aed", "#e53e3e", "#06b6d4"]
-const DASHBOARD_RECORD_LIMIT = 500
 const DespachadorView = dynamic(() => import("@/components/views/despachador-view").then((module) => module.DespachadorView), { loading: () => <p className="p-4 text-sm text-muted-foreground">Cargando ordenes...</p> })
 const RecordsView = dynamic(() => import("@/components/views/records-view").then((module) => module.RecordsView), { loading: () => <p className="p-4 text-sm text-muted-foreground">Cargando registros...</p> })
+
+interface DashboardAggregate {
+  name: string
+  count?: number
+  gallons?: number
+  value?: number
+  yield?: number
+  yieldCount?: number
+}
+
+interface DashboardHistory {
+  metrics: {
+    records: number
+    gallons: number
+    value: number
+    average: number
+    alerts: number
+    pending: number
+  }
+  monthly: DashboardAggregate[]
+  byOperator: DashboardAggregate[]
+  byBrand: DashboardAggregate[]
+  byVehicle: DashboardAggregate[]
+  orderStatus: Array<{ name: OrderStatus; count: number }>
+}
+
+const EMPTY_DASHBOARD: DashboardHistory = {
+  metrics: { records: 0, gallons: 0, value: 0, average: 0, alerts: 0, pending: 0 },
+  monthly: [],
+  byOperator: [],
+  byBrand: [],
+  byVehicle: [],
+  orderStatus: [],
+}
 
 const EMPTY_SETTINGS: CompanySettings = {
   id: "", emp_nombre: "", emp_nit: "", emp_dir: "", emp_tel: "", emp_email: "", emp_ciudad: "", emp_logo: "",
@@ -50,8 +82,7 @@ export function AdminView() {
   const [stations, setStations] = useState<ServiceStation[]>([])
   const [vehicles, setVehicles] = useState<Vehicle[]>([])
   const [profiles, setProfiles] = useState<Profile[]>([])
-  const [orders, setOrders] = useState<FuelOrder[]>([])
-  const [records, setRecords] = useState<FuelRecord[]>([])
+  const [dashboard, setDashboard] = useState<DashboardHistory>(EMPTY_DASHBOARD)
   const [vehicleDraft, setVehicleDraft] = useState<Partial<Vehicle>>(EMPTY_VEHICLE)
   const [profileDraft, setProfileDraft] = useState<Partial<Profile> & { password?: string }>(EMPTY_PROFILE)
   const [stationDraft, setStationDraft] = useState<Partial<ServiceStation>>(EMPTY_STATION)
@@ -70,19 +101,17 @@ export function AdminView() {
     try {
       const hasStations = await hasStationSchema()
       setStationSchemaReady(hasStations)
-      const [settingsResult, stationsResult, vehiclesResult, profilesResult, ordersResult] = await Promise.all([
+      const [settingsResult, stationsResult, vehiclesResult, profilesResult] = await Promise.all([
         supabase.from("company_settings").select(SETTINGS_SELECT).limit(1).maybeSingle(),
         hasStations ? supabase.from("service_stations").select(STATION_SELECT).order("nombre") : Promise.resolve({ data: [], error: null }),
         supabase.from("vehicles").select(VEHICLE_SELECT).order("placa"),
         supabase.from("profiles").select(PROFILE_SELECT).order("full_name"),
-        supabase.from("fuel_orders").select("id, estado").order("created_at", { ascending: false }),
       ])
-      for (const result of [settingsResult, stationsResult, vehiclesResult, profilesResult, ordersResult]) if (result.error) throw result.error
+      for (const result of [settingsResult, stationsResult, vehiclesResult, profilesResult]) if (result.error) throw result.error
       if (settingsResult.data) setSettings(settingsResult.data as CompanySettings)
       setStations((stationsResult.data || []) as unknown as ServiceStation[])
       setVehicles((vehiclesResult.data || []) as unknown as Vehicle[])
       setProfiles((profilesResult.data || []) as unknown as Profile[])
-      setOrders((ordersResult.data || []) as unknown as FuelOrder[])
     } catch (error: any) {
       console.error(error)
       toast.error(error.message || "No fue posible cargar el panel administrativo.")
@@ -101,7 +130,9 @@ export function AdminView() {
     try {
       const hasStations = await hasStationSchema()
       setStationSchemaReady(hasStations)
-      setRecords(await loadFuelRecords(undefined, { stationSchemaReady: hasStations, limit: DASHBOARD_RECORD_LIMIT }))
+      const { data, error } = await supabase.rpc("get_dashboard_history")
+      if (error) throw error
+      setDashboard((data || EMPTY_DASHBOARD) as DashboardHistory)
       setDashboardLoaded(true)
     } catch (error: any) {
       console.error(error)
@@ -117,25 +148,15 @@ export function AdminView() {
 
   const refreshBase = useCallback(async () => {
     setDashboardLoaded(false)
+    setDashboard(EMPTY_DASHBOARD)
     await loadBase()
   }, [loadBase])
 
-  const metrics = useMemo(() => {
-    const gallons = records.reduce((sum, record) => sum + record.galones, 0)
-    const value = records.reduce((sum, record) => sum + record.valor_total, 0)
-    return {
-      gallons,
-      value,
-      average: records.length ? gallons / records.length : 0,
-      alerts: records.filter((record) => record.alerta_rendimiento).length,
-      pending: orders.filter((order) => order.estado === "pendiente").length,
-    }
-  }, [orders, records])
-
-  const monthly = useMemo(() => aggregate(records, (record) => record.fecha.slice(0, 7), (record) => ({ gallons: record.galones, value: record.valor_total })), [records])
-  const byOperator = useMemo(() => aggregate(records, (record) => record.profiles?.full_name || "Sin nombre", (record) => ({ value: record.valor_total })), [records])
-  const byBrand = useMemo(() => aggregate(records, (record) => record.vehicles?.marca || "Otra", (record) => ({ count: 1, gallons: record.galones, value: record.valor_total, yield: record.rendimiento_real || 0, yieldCount: record.rendimiento_real ? 1 : 0 })), [records])
-  const byVehicle = useMemo(() => aggregate(records, (record) => record.vehicles?.placa || "Sin placa", (record) => ({ count: 1, gallons: record.galones, value: record.valor_total, yield: record.rendimiento_real || 0, yieldCount: record.rendimiento_real ? 1 : 0 })), [records])
+  const metrics = dashboard.metrics
+  const monthly = dashboard.monthly
+  const byOperator = dashboard.byOperator
+  const byBrand = dashboard.byBrand
+  const byVehicle = dashboard.byVehicle
 
   const saveSettings = async (event: React.FormEvent) => {
     event.preventDefault()
@@ -246,17 +267,17 @@ export function AdminView() {
         <TabsContent value="dashboard" className="space-y-4">
           {loadingDashboard && <p className="rounded-md bg-muted p-3 text-sm text-muted-foreground">Cargando indicadores...</p>}
           <div className="grid grid-cols-2 md:grid-cols-4 xl:grid-cols-8 gap-3">
-            <Metric label="Registros" value={records.length} icon={<ClipboardList />} /><Metric label="Galones totales" value={formatNumber(metrics.gallons)} icon={<Fuel />} /><Metric label="Gasto total" value={`$${formatNumber(metrics.value / 1_000_000)} M`} icon={<DollarSign />} /><Metric label="Motos activas" value={vehicles.filter((item) => item.activo !== false).length} icon={<Car />} /><Metric label="Estaciones activas" value={stations.filter((item) => item.activo).length} icon={<Building2 />} /><Metric label="Prom. gal/registro" value={formatNumber(metrics.average)} icon={<BarChart3 />} /><Metric label="Alertas" value={metrics.alerts} icon={<AlertTriangle />} /><Metric label="Ordenes pendientes" value={metrics.pending} icon={<ClipboardList />} />
+            <Metric label="Registros" value={metrics.records} icon={<ClipboardList />} /><Metric label="Galones totales" value={formatNumber(metrics.gallons)} icon={<Fuel />} /><Metric label="Gasto total" value={`$${formatNumber(metrics.value / 1_000_000)} M`} icon={<DollarSign />} /><Metric label="Motos activas" value={vehicles.filter((item) => item.activo !== false).length} icon={<Car />} /><Metric label="Estaciones activas" value={stations.filter((item) => item.activo).length} icon={<Building2 />} /><Metric label="Prom. gal/registro" value={formatNumber(metrics.average)} icon={<BarChart3 />} /><Metric label="Alertas" value={metrics.alerts} icon={<AlertTriangle />} /><Metric label="Ordenes pendientes" value={metrics.pending} icon={<ClipboardList />} />
           </div>
           <div className="grid lg:grid-cols-2 gap-4">
             <Chart title="Consumo mensual"><BarChart data={monthly}><CartesianGrid strokeDasharray="3 3" /><XAxis dataKey="name" /><YAxis /><Tooltip formatter={chartTooltip} /><Bar dataKey="gallons" name="Galones" fill="#1a56db" /></BarChart></Chart>
             <Chart title="Gasto por operario"><BarChart data={byOperator}><CartesianGrid strokeDasharray="3 3" /><XAxis dataKey="name" /><YAxis /><Tooltip formatter={chartTooltip} /><Bar dataKey="value" name="Valor" fill="#0ea768" /></BarChart></Chart>
-            <Chart title="Rendimiento km/gal por moto"><BarChart data={byVehicle.map((item) => ({ ...item, averageYield: item.yieldCount ? item.yield / item.yieldCount : 0 }))}><CartesianGrid strokeDasharray="3 3" /><XAxis dataKey="name" /><YAxis /><Tooltip formatter={chartTooltip} /><Bar dataKey="averageYield" name="Rendimiento promedio" fill="#d97706" /></BarChart></Chart>
+            <Chart title="Rendimiento km/gal por moto"><BarChart data={byVehicle.map((item) => ({ ...item, averageYield: item.yieldCount ? (item.yield || 0) / item.yieldCount : 0 }))}><CartesianGrid strokeDasharray="3 3" /><XAxis dataKey="name" /><YAxis /><Tooltip formatter={chartTooltip} /><Bar dataKey="averageYield" name="Rendimiento promedio" fill="#d97706" /></BarChart></Chart>
             <Chart title="Distribucion por marca"><PieChart><Pie data={byBrand} dataKey="value" nameKey="name" outerRadius={85}>{byBrand.map((item, index) => <Cell key={item.name} fill={CHART_COLORS[index % CHART_COLORS.length]} />)}</Pie><Tooltip formatter={chartTooltip} /><Legend /></PieChart></Chart>
             <Chart title="Distribucion por placa"><PieChart><Pie data={byVehicle} dataKey="gallons" nameKey="name" outerRadius={85}>{byVehicle.map((item, index) => <Cell key={item.name} fill={CHART_COLORS[index % CHART_COLORS.length]} />)}</Pie><Tooltip formatter={chartTooltip} /><Legend /></PieChart></Chart>
             <Chart title="Evolucion de costos" wide><LineChart data={monthly}><CartesianGrid strokeDasharray="3 3" /><XAxis dataKey="name" /><YAxis /><Tooltip formatter={chartTooltip} /><Line type="monotone" dataKey="value" name="Valor" stroke="#7c3aed" /></LineChart></Chart>
           </div>
-          <SummaryTables byVehicle={byVehicle} byOperator={byOperator} byBrand={byBrand} orders={orders} />
+          <SummaryTables byVehicle={byVehicle} byOperator={byOperator} byBrand={byBrand} orderStatus={dashboard.orderStatus} />
         </TabsContent>
         <TabsContent value="ordenes"><DespachadorView embedded /></TabsContent>
         <TabsContent value="registros"><RecordsView allowDelete embedded /></TabsContent>
@@ -324,9 +345,10 @@ function Chart({ title, children, wide = false }: { title: string; children: Rea
   return <Card className={wide ? "lg:col-span-2" : ""}><CardHeader><CardTitle className="text-sm">{title}</CardTitle></CardHeader><CardContent className="h-56 px-1 sm:h-64 sm:px-6"><ResponsiveContainer width="100%" height="100%">{children}</ResponsiveContainer></CardContent></Card>
 }
 
-function SummaryTables({ byVehicle, byOperator, byBrand, orders }: { byVehicle: any[]; byOperator: any[]; byBrand: any[]; orders: FuelOrder[] }) {
-  const states = ["pendiente", "ejecutada", "vencida", "cerrada", "verificado", "observacion"]
-  return <div className="grid lg:grid-cols-2 gap-4"><SmallTable title="Resumen por moto" rows={byVehicle.map((item) => [item.name, item.count || 0, `${formatNumber(item.gallons || 0)} gal`, formatCurrency(item.value)])} /><SmallTable title="Resumen por operario" rows={byOperator.map((item) => [item.name, "-", "-", formatCurrency(item.value)])} /><SmallTable title="Rendimiento por marca" rows={byBrand.map((item) => [item.name, item.count || 0, `${formatNumber(item.gallons || 0)} gal`, item.yieldCount ? `${formatNumber(item.yield / item.yieldCount)} km/gal` : "-"])} /><SmallTable title="Estado de ordenes" rows={states.map((state) => [formatOrderStatus(state as FuelOrder["estado"]), orders.filter((item) => item.estado === state).length, "", ""])} /></div>
+function SummaryTables({ byVehicle, byOperator, byBrand, orderStatus }: { byVehicle: DashboardAggregate[]; byOperator: DashboardAggregate[]; byBrand: DashboardAggregate[]; orderStatus: DashboardHistory["orderStatus"] }) {
+  const states: OrderStatus[] = ["pendiente", "ejecutada", "vencida", "cerrada", "verificado", "observacion"]
+  const statusCounts = new Map(orderStatus.map((item) => [item.name, item.count]))
+  return <div className="grid lg:grid-cols-2 gap-4"><SmallTable title="Resumen por moto" rows={byVehicle.map((item) => [item.name, item.count || 0, `${formatNumber(item.gallons || 0)} gal`, formatCurrency(item.value)])} /><SmallTable title="Resumen por operario" rows={byOperator.map((item) => [item.name, "-", "-", formatCurrency(item.value)])} /><SmallTable title="Rendimiento por marca" rows={byBrand.map((item) => [item.name, item.count || 0, `${formatNumber(item.gallons || 0)} gal`, item.yieldCount ? `${formatNumber((item.yield || 0) / item.yieldCount)} km/gal` : "-"])} /><SmallTable title="Estado de ordenes" rows={states.map((state) => [formatOrderStatus(state), statusCounts.get(state) || 0, "", ""])} /></div>
 }
 
 function SmallTable({ title, rows }: { title: string; rows: Array<Array<string | number>> }) {
@@ -348,16 +370,6 @@ function SettingsFields({ settings, setSettings }: { settings: CompanySettings; 
 
 function Field({ label, children }: { label: string; children: React.ReactNode }) {
   return <div className="space-y-1"><Label>{label}</Label>{children}</div>
-}
-
-function aggregate<T extends Record<string, number>>(records: FuelRecord[], key: (record: FuelRecord) => string, values: (record: FuelRecord) => T): Array<{ name: string } & T> {
-  const result: Record<string, Record<string, number>> = {}
-  records.forEach((record) => {
-    const name = key(record)
-    if (!result[name]) result[name] = {}
-    Object.entries(values(record)).forEach(([valueKey, value]) => { result[name][valueKey] = (result[name][valueKey] || 0) + value })
-  })
-  return Object.entries(result).map(([name, values]) => ({ name, ...values })) as Array<{ name: string } & T>
 }
 
 function chartTooltip(value: number | string | Array<number | string>, name: string) {
